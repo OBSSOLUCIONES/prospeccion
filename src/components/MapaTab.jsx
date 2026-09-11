@@ -1,5 +1,5 @@
 // src/components/MapaTab.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Navigation, Radio, Layers, Crosshair } from 'lucide-react';
@@ -18,7 +18,6 @@ const SUCURSAL_COORDS = {
   'ZIHUATANEJO': [17.6410, -101.5510]
 };
 
-// Pines estilizados
 const obraIcon = L.divIcon({
   className: 'bg-transparent border-none',
   html: `
@@ -57,61 +56,31 @@ const tuDispositivoIcon = L.divIcon({
   iconAnchor: [12, 12]
 });
 
-// CONTROLADOR INTELIGENTE: Solo mueve la cámara cuando TÚ cambias la sucursal, no a cada segundo
-function ControladorMapa({ filtroSucursal, initialCenter }) {
+// CONTROLADOR PASIVO: Únicamente ejecuta acciones cuando tú presionas un botón
+function AccionesUsuarioEnMapa({ vueloDestino, onVueloCompletado }) {
   const map = useMap();
-  const inicializadoRef = useRef(false);
-  const sucursalAnteriorRef = useRef(filtroSucursal);
 
   useEffect(() => {
-    // 1. Centrado inicial una sola vez al abrir el mapa
-    if (!inicializadoRef.current && initialCenter?.lat) {
-      inicializadoRef.current = true;
-      map.setView([initialCenter.lat, initialCenter.lng], 12);
-      return;
+    if (vueloDestino) {
+      map.flyTo(vueloDestino.coords, vueloDestino.zoom || 14, { duration: 1.2 });
+      onVueloCompletado();
     }
-
-    // 2. Solo volar si el usuario cambió manualmente de sucursal
-    if (filtroSucursal !== sucursalAnteriorRef.current) {
-      sucursalAnteriorRef.current = filtroSucursal;
-      if (filtroSucursal !== 'TODAS' && SUCURSAL_COORDS[filtroSucursal]) {
-        map.flyTo(SUCURSAL_COORDS[filtroSucursal], 13, { duration: 1.2 });
-      }
-    }
-  }, [filtroSucursal, map, initialCenter]);
+  }, [vueloDestino, map, onVueloCompletado]);
 
   return null;
-}
-
-// Botón flotante para regresar a tu GPS
-function BotonCentrarGps({ tabletPos }) {
-  const map = useMap();
-  const centrar = () => {
-    if (tabletPos?.lat && tabletPos?.lng) {
-      map.flyTo([tabletPos.lat, tabletPos.lng], 15, { duration: 1 });
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={centrar}
-      className="absolute bottom-6 right-4 z-[400] bg-white text-[#001757] hover:text-[#0091FB] font-black text-xs p-3 rounded-2xl shadow-xl border border-slate-200 flex items-center gap-1.5 active:scale-95 transition-all">
-      <Crosshair className="w-4 h-4 text-[#0091FB]" />
-      <span>Mi Ubicación</span>
-    </button>
-  );
 }
 
 export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbrirRuta, filtroSucursal, setFiltroSucursal }) {
   const [verObras, setVerObras] = useState(true);
   const [verClientes, setVerClientes] = useState(true);
+  const [ordenVuelo, setOrdenVuelo] = useState(null);
 
-  // Filtrado por sucursal
+  // Centro inicial estático (no se recalcula a cada segundo)
+  const centroInicial = [tabletPos?.lat || 19.6642, tabletPos?.lng || -101.1718];
+
   const visitasPorSucursal = visitas.filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal);
   const clientesPorSucursal = clientes.filter(c => filtroSucursal === 'TODAS' || c.sucursal === filtroSucursal);
 
-  // Coordenadas fijas de obras
   const obrasConCoordenadas = visitasPorSucursal
     .filter(v => v.latGpsReal || v.lat)
     .map(v => ({
@@ -119,6 +88,29 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
       latFinal: Number(v.lat || v.latGpsReal),
       lngFinal: Number(v.lng || v.lngGpsReal)
     }));
+
+  const handleCambiarSucursal = (sucursalSeleccionada) => {
+    setFiltroSucursal(sucursalSeleccionada);
+    if (sucursalSeleccionada !== 'TODAS' && SUCURSAL_COORDS[sucursalSeleccionada]) {
+      setOrdenVuelo({
+        coords: SUCURSAL_COORDS[sucursalSeleccionada],
+        zoom: 13
+      });
+    }
+  };
+
+  const handleCentrarMiGps = () => {
+    if (tabletPos?.lat && tabletPos?.lng) {
+      setOrdenVuelo({
+        coords: [tabletPos.lat, tabletPos.lng],
+        zoom: 16
+      });
+    }
+  };
+
+  const resetVuelo = useCallback(() => {
+    setOrdenVuelo(null);
+  }, []);
 
   return (
     <div className="space-y-2.5 pb-24">
@@ -140,7 +132,7 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
 
           <select
             value={filtroSucursal}
-            onChange={(e) => setFiltroSucursal(e.target.value)}
+            onChange={(e) => handleCambiarSucursal(e.target.value)}
             className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black text-[#001757] outline-none">
             <option value="TODAS">Todas las Sucursales ({SUCURSALES.length})</option>
             {SUCURSALES.map(s => (
@@ -149,7 +141,6 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
           </select>
         </div>
 
-        {/* Capas activables */}
         <div className="flex items-center gap-2 pt-1 border-t border-slate-100 flex-wrap">
           <span className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
             <Layers className="w-3 h-3" /> Ver:
@@ -175,10 +166,10 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
         </div>
       </div>
 
-      {/* CONTENEDOR DEL MAPA CON CONTROL TOTAL Y SIN BLOQUEOS */}
+      {/* CONTENEDOR DEL MAPA CON CONTROL TOTAL Y SIN RESETEOS */}
       <div className="h-[68vh] w-full rounded-3xl overflow-hidden border border-slate-200 shadow-sm relative">
         <MapContainer 
-          center={[tabletPos.lat, tabletPos.lng]} 
+          center={centroInicial} 
           zoom={12} 
           scrollWheelZoom={true}
           touchZoom={true}
@@ -190,34 +181,38 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
           />
           
-          {/* Controlador inteligente que no pelea con el usuario */}
-          <ControladorMapa filtroSucursal={filtroSucursal} initialCenter={tabletPos} />
-          
-          {/* Botón flotante para volver a centrar si te alejas */}
-          <BotonCentrarGps tabletPos={tabletPos} />
-
-          {/* Círculo suave de precisión de tu GPS */}
-          <Circle
-            center={[tabletPos.lat, tabletPos.lng]}
-            radius={tabletPos.accuracy || 15}
-            pathOptions={{
-              color: '#0091FB',
-              fillColor: '#0091FB',
-              fillOpacity: 0.1,
-              weight: 1.5,
-              dashArray: '3, 4'
-            }}
+          {/* Controlador pasivo sin loops */}
+          <AccionesUsuarioEnMapa 
+            vueloDestino={ordenVuelo} 
+            onVueloCompletado={resetVuelo} 
           />
 
+          {/* Círculo suave de precisión de tu GPS */}
+          {tabletPos?.lat && tabletPos?.lng && (
+            <Circle
+              center={[tabletPos.lat, tabletPos.lng]}
+              radius={tabletPos.accuracy || 15}
+              pathOptions={{
+                color: '#0091FB',
+                fillColor: '#0091FB',
+                fillOpacity: 0.1,
+                weight: 1.5,
+                dashArray: '3, 4'
+              }}
+            />
+          )}
+
           {/* Pin de tu tablet / teléfono */}
-          <Marker position={[tabletPos.lat, tabletPos.lng]} icon={tuDispositivoIcon}>
-            <Popup>
-              <div className="text-xs font-bold text-slate-800">
-                <p className="text-[#0091FB] font-black">Tu Ubicación en Vivo</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Precisión GPS: ±{tabletPos.accuracy}m</p>
-              </div>
-            </Popup>
-          </Marker>
+          {tabletPos?.lat && tabletPos?.lng && (
+            <Marker position={[tabletPos.lat, tabletPos.lng]} icon={tuDispositivoIcon}>
+              <Popup>
+                <div className="text-xs font-bold text-slate-800">
+                  <p className="text-[#0091FB] font-black">Tu Ubicación</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Precisión: ±{tabletPos.accuracy}m</p>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
           {/* PINES DE OBRAS */}
           {verObras && obrasConCoordenadas.map(v => (
@@ -278,6 +273,15 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
           ))}
 
         </MapContainer>
+
+        {/* BOTÓN FLOTANTE MI UBICACIÓN (FUERA DEL MAPCONTAINER PARA QUE RESPONDA AL INSTANTE) */}
+        <button
+          type="button"
+          onClick={handleCentrarMiGps}
+          className="absolute bottom-4 right-4 z-[400] bg-white text-[#001757] hover:text-[#0091FB] font-black text-xs px-3.5 py-2.5 rounded-2xl shadow-xl border border-slate-200 flex items-center gap-1.5 active:scale-95 transition-all">
+          <Crosshair className="w-4 h-4 text-[#0091FB]" />
+          <span>Mi Ubicación</span>
+        </button>
       </div>
 
     </div>
