@@ -1,0 +1,18 @@
+{
+  "name": "Control de Obras - Red Azul",
+  "short_name": "Control Obras",
+  "description": "Gestión técnica de obras, clientes y auditoría satelital en campo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0066FF",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

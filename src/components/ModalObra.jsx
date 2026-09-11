@@ -1,0 +1,244 @@
+// src/components/ModalObra.jsx
+import React, { useState, useEffect } from 'react';
+import { X, MapPin, Check } from 'lucide-react';
+import { SUCURSALES, FASES_OBRA, CAT_TIPO_DESARROLLO, CAT_ESTADO_OBRA } from '../data/constants';
+
+export default function ModalObra({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  obraAEditar, 
+  clientes = [], 
+  obras = [], 
+  tabletPos, 
+  onAbrirMapaPicker,
+  usuarioActivo 
+}) {
+  const [form, setForm] = useState({
+    sucursal: 'ALTOZANO',
+    nombre: '',
+    clienteId: '',
+    tipoDesarrollo: 'OBRA NUEVA',
+    estatusFase: 'PRELIMINARES',
+    estadoObra: 'ACTIVA',
+    direccion: '',
+    lat: null,
+    lng: null
+  });
+
+  useEffect(() => {
+    if (obraAEditar) {
+      setForm({
+        ...obraAEditar,
+        estadoObra: obraAEditar.estadoObra || 'ACTIVA'
+      });
+    } else {
+      const sucursalDefault = (usuarioActivo && usuarioActivo.sucursal !== 'TODAS') 
+        ? usuarioActivo.sucursal 
+        : 'ALTOZANO';
+
+      setForm({
+        sucursal: sucursalDefault,
+        nombre: '',
+        clienteId: '',
+        tipoDesarrollo: 'OBRA NUEVA',
+        estatusFase: 'PRELIMINARES',
+        estadoObra: 'ACTIVA',
+        direccion: '',
+        lat: tabletPos?.lat || null,
+        lng: tabletPos?.lng || null
+      });
+    }
+  }, [obraAEditar, isOpen, tabletPos, usuarioActivo]);
+
+  if (!isOpen) return null;
+
+  const sucursalObj = SUCURSALES.find(s => s.nombre === form.sucursal) || SUCURSALES[0];
+  const existentes = obras.filter(o => o.id && o.id.startsWith(`OBR-${sucursalObj.codigo}`)).length;
+  const idMostrado = obraAEditar ? obraAEditar.id : `OBR-${sucursalObj.codigo}${String(existentes + 1).padStart(2, '0')}`;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({
+      id: idMostrado,
+      ...form,
+      createdAt: obraAEditar ? obraAEditar.createdAt : new Date().toISOString()
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+        
+        <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-black text-[#001757]">
+              {obraAEditar ? 'Editar Obra' : 'Registrar Nueva Obra'}
+            </h2>
+            <span className="bg-[#0091FB] text-white font-mono font-bold text-xs px-2 py-0.5 rounded-lg">
+              {idMostrado}
+            </span>
+          </div>
+
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="w-9 h-9 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form id="form-obra" onSubmit={handleSubmit} className="overflow-y-auto p-4 space-y-3.5 text-xs">
+          
+          <div className="grid grid-cols-2 gap-2 bg-blue-50/60 p-3 rounded-2xl border border-blue-100">
+            <div>
+              <label className="block font-black text-[#001757] mb-1">Sucursal *</label>
+              <select
+                value={form.sucursal}
+                disabled={Boolean(obraAEditar || (usuarioActivo && usuarioActivo.sucursal !== 'TODAS'))}
+                onChange={(e) => setForm({...form, sucursal: e.target.value})}
+                className="w-full h-10 px-2.5 rounded-xl border border-blue-200 bg-white font-bold text-slate-800 text-xs outline-none disabled:bg-slate-100">
+                {SUCURSALES.map(s => <option key={s.codigo} value={s.nombre}>{s.nombre} ({s.codigo})</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-black text-[#001757] mb-1">Tipo de Desarrollo</label>
+              <select
+                value={form.tipoDesarrollo}
+                onChange={(e) => setForm({...form, tipoDesarrollo: e.target.value})}
+                className="w-full h-10 px-2.5 rounded-xl border border-blue-200 bg-white font-semibold text-slate-800 text-xs outline-none">
+                {CAT_TIPO_DESARROLLO.map(td => <option key={td} value={td}>{td}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-800 mb-1">Nombre del Proyecto / Obra *</label>
+            <input 
+              type="text" required
+              value={form.nombre}
+              onChange={(e) => setForm({...form, nombre: e.target.value})}
+              placeholder="Ej. Residencia Lote 14, Fracc. Las Américas"
+              className="w-full h-11 px-3.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-900 outline-none focus:border-[#0091FB]"
+            />
+          </div>
+
+          {/* ESTADO COMERCIAL DE LA OBRA (CICLO DE VIDA) */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+            <label className="block font-black text-slate-800 text-[11px] uppercase tracking-wider">
+              Estado Operativo de la Obra *
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'ACTIVA', label: 'En Proceso' },
+                { id: 'PAUSADA', label: 'Pausada' },
+                { id: 'TERMINADA', label: 'Concluida' }
+              ].map(est => (
+                <button
+                  key={est.id}
+                  type="button"
+                  onClick={() => setForm({...form, estadoObra: est.id})}
+                  className={`py-2 px-2 rounded-xl text-xs font-black border transition-all ${
+                    form.estadoObra === est.id
+                      ? (est.id === 'ACTIVA' ? 'bg-emerald-600 text-white border-emerald-600' : est.id === 'PAUSADA' ? 'bg-amber-600 text-white border-amber-600' : 'bg-slate-700 text-white border-slate-700')
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  {est.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-bold text-slate-800">Cliente Vinculado</label>
+              <span className="text-[10px] text-slate-400 font-semibold">(Opcional)</span>
+            </div>
+            <select
+              value={form.clienteId || ''}
+              onChange={(e) => {
+                const cId = e.target.value;
+                const c = clientes.find(item => item.id === cId);
+                setForm(prev => ({
+                  ...prev,
+                  clienteId: cId || null,
+                  direccion: c?.direccion || prev.direccion,
+                  lat: c?.lat ? parseFloat(c.lat) : prev.lat,
+                  lng: c?.lng ? parseFloat(c.lng) : prev.lng
+                }));
+              }}
+              className="w-full h-11 px-3 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800 outline-none">
+              <option value="">-- Sin cliente asignado (Prospección) --</option>
+              {clientes.map(c => (
+                <option key={c.id} value={c.id}>{c.id} - {c.nombreCliente}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-800 mb-1.5">Fase Constructiva *</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {FASES_OBRA.map(fase => (
+                <button
+                  key={fase}
+                  type="button"
+                  onClick={() => setForm({...form, estatusFase: fase})}
+                  className={`h-10 px-2 rounded-xl text-xs font-bold border transition-all truncate ${
+                    form.estatusFase === fase
+                      ? 'bg-[#001757] text-white border-[#001757] shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  {fase}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-slate-900 text-xs">Ubicación GPS *</label>
+              {form.lat && form.lng && (
+                <span className="text-[10px] font-mono text-slate-500">
+                  {Number(form.lat).toFixed(4)}, {Number(form.lng).toFixed(4)}
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs font-semibold text-slate-800 bg-white p-2.5 rounded-xl border border-slate-200">
+              {form.direccion || 'Toca el botón para fijar la ubicación en el mapa'}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                onAbrirMapaPicker({
+                  initialPos: form.lat && form.lng ? { lat: form.lat, lng: form.lng } : tabletPos,
+                  onConfirm: ({ lat, lng, direccion }) => {
+                    setForm(prev => ({ ...prev, lat, lng, direccion: direccion || prev.direccion }));
+                  }
+                });
+              }}
+              className="w-full h-11 bg-white hover:bg-slate-50 active:scale-98 border border-blue-300 rounded-xl text-xs font-black text-[#001757] flex items-center justify-center gap-2 shadow-xs transition-all">
+              <MapPin className="w-4 h-4 text-rose-500" />
+              <span>🗺️ Seleccionar en el mapa</span>
+            </button>
+          </div>
+
+        </form>
+
+        <div className="p-3.5 bg-white border-t border-slate-100 shrink-0">
+          <button
+            type="submit"
+            form="form-obra"
+            className="w-full h-12 rounded-2xl bg-[#0091FB] hover:bg-[#007be0] active:scale-98 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2">
+            <Check className="w-5 h-5 stroke-[3]" />
+            <span>{obraAEditar ? 'Guardar Cambios' : `Crear Obra (${idMostrado})`}</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
