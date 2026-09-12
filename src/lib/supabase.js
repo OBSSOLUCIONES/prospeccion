@@ -280,9 +280,10 @@ export async function guardarClienteDB(cliente) {
     const { error } = await supabase.from('clientes').upsert(fila);
     if (error) {
       console.error('Error guardando cliente en Supabase:', error);
+      alert(`⚠️ Error guardando cliente en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
     } else {
-      console.log('✅ Cliente guardado en Supabase:', fila.id);
+      console.log('✅ Cliente guardado con éxito en Supabase:', fila.id);
     }
   } catch (err) {
     await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
@@ -298,6 +299,7 @@ export async function eliminarClienteDB(id) {
   try {
     const { error } = await supabase.from('clientes').delete().eq('id', idLimpio);
     if (error) {
+      alert(`⚠️ Error eliminando cliente en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `del_cli_${idLimpio}_${Date.now()}`, tabla: 'clientes_delete', datos: { id: idLimpio } });
     }
   } catch {
@@ -306,7 +308,7 @@ export async function eliminarClienteDB(id) {
 }
 
 // ==========================================
-// CRUD OBRAS (CON AUTO-RECUPERACIÓN DE CLIENTE)
+// CRUD OBRAS
 // ==========================================
 export async function obtenerObrasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -360,23 +362,29 @@ export async function guardarObraDB(obra) {
     const { error } = await supabase.from('obras').upsert(fila);
     if (error) {
       console.warn('Aviso Supabase al guardar obra:', error.message);
-      // Si falló por la llave foránea de cliente_id, guardamos la obra sin cliente para que NUNCA se pierda
-      if (error.message && error.message.includes('cliente_id')) {
+      // Si la llave de cliente falló, intentamos guardar sin cliente_id para asegurar la obra
+      if (error.message && (error.message.includes('cliente_id') || error.code === '23503')) {
         fila.cliente_id = null;
-        await supabase.from('obras').upsert(fila);
-        console.log('✅ Obra guardada en Supabase (modo seguro sin cliente):', fila.id);
+        const reintento = await supabase.from('obras').upsert(fila);
+        if (reintento.error) {
+          alert(`⚠️ Error guardando obra en Supabase: ${reintento.error.message}`);
+          await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+        } else {
+          console.log('✅ Obra guardada en Supabase (modo seguro):', fila.id);
+        }
       } else {
+        alert(`⚠️ Error guardando obra en Supabase: ${error.message}`);
         await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
       }
     } else {
       console.log('✅ Obra guardada con éxito en Supabase:', fila.id);
     }
   } catch (err) {
+    alert(`⚠️ Error de red al guardar obra: ${err.message}`);
     await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
   }
 }
 
-// ELIMINACIÓN EN CASCADA COMPLETA EN SUPABASE
 export async function eliminarObraDB(id) {
   const idLimpio = String(id).trim().toUpperCase();
   if (!supabase || !navigator.onLine) {
@@ -384,17 +392,16 @@ export async function eliminarObraDB(id) {
     return;
   }
   try {
-    // 1. Eliminar movimientos comerciales asociados
+    // 1. Limpieza en cascada de hijos primero
     await supabase.from('movimientos_comerciales').delete().eq('obra_id', idLimpio);
-    // 2. Eliminar visitas asociadas
     await supabase.from('visitas').delete().eq('obra_id', idLimpio);
-    // 3. Eliminar la obra
+    // 2. Borrar obra
     const { error } = await supabase.from('obras').delete().eq('id', idLimpio);
     if (error) {
-      console.error('Error eliminando obra:', error);
+      alert(`⚠️ Error eliminando obra en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
     } else {
-      console.log('✅ Obra, visitas y ventas eliminadas en cascada de Supabase:', idLimpio);
+      console.log('✅ Obra y dependencias eliminadas con éxito de Supabase:', idLimpio);
     }
   } catch (err) {
     await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
@@ -455,12 +462,33 @@ export async function guardarVisitaDB(visita) {
     const { error } = await supabase.from('visitas').upsert(fila);
     if (error) {
       console.error('Error guardando visita en Supabase:', error);
+      alert(`⚠️ Error guardando visita en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
     } else {
       console.log('✅ Visita guardada con éxito en Supabase:', fila.id);
     }
   } catch (err) {
+    alert(`⚠️ Error de red al guardar visita: ${err.message}`);
     await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+  }
+}
+
+export async function eliminarVisitaDB(id) {
+  const idLimpio = String(id).trim().toUpperCase();
+  if (!supabase || !navigator.onLine) {
+    await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
+    return;
+  }
+  try {
+    const { error } = await supabase.from('visitas').delete().eq('id', idLimpio);
+    if (error) {
+      alert(`⚠️ Error eliminando visita en Supabase: ${error.message}`);
+      await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
+    } else {
+      console.log('✅ Visita eliminada de Supabase:', idLimpio);
+    }
+  } catch (err) {
+    await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
   }
 }
 
@@ -521,7 +549,7 @@ export async function guardarMovimientoDB(mov) {
   try {
     const { error } = await supabase.from('movimientos_comerciales').upsert(fila);
     if (error) {
-      console.error('Error guardando venta/cotización en Supabase:', error);
+      alert(`⚠️ Error guardando venta en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `mov_${fila.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
     } else {
       console.log('✅ Movimiento comercial guardado en Supabase:', fila.id);
@@ -589,6 +617,12 @@ export async function sincronizarColaOffline() {
         }
         const filaVisita = { ...item.datos, fotos: fotosFinales };
         const { error } = await supabase.from('visitas').upsert(filaVisita);
+        if (!error) {
+          await eliminarItemColaOffline(item.id);
+          sincronizados++;
+        }
+      } else if (item.tabla === 'visitas_delete') {
+        const { error } = await supabase.from('visitas').delete().eq('id', item.datos.id);
         if (!error) {
           await eliminarItemColaOffline(item.id);
           sincronizados++;

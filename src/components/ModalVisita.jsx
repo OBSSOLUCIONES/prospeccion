@@ -1,8 +1,7 @@
-// src/components/ModalVisita.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Camera, Image as ImageIcon, Loader2, 
-  Mic, MicOff, Check, WifiOff
+  Mic, MicOff, Check, WifiOff, Pencil
 } from 'lucide-react';
 import { FASES_OBRA, CAT_ACTIVIDAD_VISITA } from '../data/constants';
 import { subirArchivoSupabase } from '../lib/supabase';
@@ -37,7 +36,8 @@ export default function ModalVisita({
   obra, 
   onSave, 
   tabletPos, 
-  usuarioActivo 
+  usuarioActivo,
+  visitaAEditar = null
 }) {
   const [fase, setFase] = useState('CIMENTACIÓN');
   const [actividad, setActividad] = useState('SUPERVISIÓN TÉCNICA');
@@ -51,12 +51,20 @@ export default function ModalVisita({
   const debeSeguirGrabandoRef = useRef(false);
 
   useEffect(() => {
-    if (obra) {
+    if (!isOpen) return;
+
+    if (visitaAEditar) {
+      setFase(visitaAEditar.estatus || 'CIMENTACIÓN');
+      setActividad(visitaAEditar.actividad || 'SUPERVISIÓN TÉCNICA');
+      setFecha(visitaAEditar.fecha ? visitaAEditar.fecha.replace(' ', 'T') : obtenerFechaHoraActual());
+      setObservaciones(visitaAEditar.observaciones || '');
+      setFotos(visitaAEditar.fotos || []);
+    } else if (obra) {
       setFase(obra.estatusFase || 'CIMENTACIÓN');
+      setFecha(obtenerFechaHoraActual());
+      setObservaciones('');
+      setFotos([]);
     }
-    setFecha(obtenerFechaHoraActual());
-    setObservaciones('');
-    setFotos([]);
 
     return () => {
       debeSeguirGrabandoRef.current = false;
@@ -64,9 +72,9 @@ export default function ModalVisita({
         try { recognitionRef.current.stop(); } catch (_) {}
       }
     };
-  }, [obra, isOpen]);
+  }, [obra, isOpen, visitaAEditar]);
 
-  if (!isOpen || !obra) return null;
+  if (!isOpen || (!obra && !visitaAEditar)) return null;
 
   const toggleDictadoVoz = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -101,7 +109,7 @@ export default function ModalVisita({
           }
         }
         if (textoNuevo.trim()) {
-          setObservaciones(prev => prev ? `${prev.trim()} ${textoNuevo.trim()}` : textoNuevo.trim());
+          setObservaciones(prev => prev ? `${prev.trim()} ${textoNuevo.trim().toUpperCase()}` : textoNuevo.trim().toUpperCase());
         }
       };
 
@@ -144,53 +152,57 @@ export default function ModalVisita({
       try { recognitionRef.current.stop(); } catch (_) {}
     }
 
-    const latGpsReal = tabletPos?.lat || obra.lat;
-    const lngGpsReal = tabletPos?.lng || obra.lng;
-    const distancia = calcularDistanciaMetros(obra.lat, obra.lng, latGpsReal, lngGpsReal);
+    const obraRef = obra || { id: visitaAEditar?.obraId, sucursal: visitaAEditar?.sucursal, lat: visitaAEditar?.latGpsReal, lng: visitaAEditar?.lngGpsReal };
+    const latGpsReal = tabletPos?.lat || obraRef.lat;
+    const lngGpsReal = tabletPos?.lng || obraRef.lng;
+    const distancia = calcularDistanciaMetros(obraRef.lat, obraRef.lng, latGpsReal, lngGpsReal);
 
     let auditoriaEstado = 'en_sitio';
     if (distancia > 1000) auditoriaEstado = 'remoto';
     else if (distancia > 250) auditoriaEstado = 'perimetro';
 
     onSave({
-      id: `VIS-${Date.now().toString().slice(-6)}`,
-      obraId: obra.id,
-      sucursal: obra.sucursal,
+      id: visitaAEditar ? visitaAEditar.id : `VIS-${Date.now().toString().slice(-6)}`,
+      obraId: obraRef.id,
+      sucursal: obraRef.sucursal,
       fecha: fecha.replace('T', ' '),
-      asesorNombre: usuarioActivo?.nombre || 'Asesor',
+      asesorNombre: visitaAEditar ? visitaAEditar.asesorNombre : (usuarioActivo?.nombre || 'Asesor'),
       estatus: fase,
       actividad,
       observaciones,
       fotos,
-      latGpsReal,
-      lngGpsReal,
-      distanciaAuditoriaMetros: distancia,
-      auditoriaEstado
+      latGpsReal: visitaAEditar?.latGpsReal || latGpsReal,
+      lngGpsReal: visitaAEditar?.lngGpsReal || lngGpsReal,
+      distanciaAuditoriaMetros: visitaAEditar?.distanciaAuditoriaMetros || distancia,
+      auditoriaEstado: visitaAEditar?.auditoriaEstado || auditoriaEstado
     });
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
       <div className="w-full sm:max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
         
-        {/* Barra de arrastre táctil */}
         <div className="pt-2 pb-1 sm:hidden">
           <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
         </div>
 
-        {/* Cabecera Fija */}
+        {/* Cabecera */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="min-w-0 pr-2">
             <div className="flex items-center gap-2">
-              <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">Check-in de Campo</h3>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                {visitaAEditar ? 'Editar Visita de Campo' : 'Check-in de Campo'}
+              </h3>
               {!navigator.onLine && (
                 <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-md flex items-center gap-1 border border-amber-300">
                   <WifiOff className="w-3 h-3 text-amber-700" /> Offline
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 truncate mt-0.5">Obra: <strong className="text-slate-800">{obra.nombre}</strong></p>
+            <p className="text-xs text-slate-500 truncate mt-0.5">
+              {visitaAEditar ? `Folio: ${visitaAEditar.id}` : `Obra: ${obra?.nombre}`}
+            </p>
           </div>
           <button 
             type="button"
@@ -200,7 +212,6 @@ export default function ModalVisita({
           </button>
         </div>
 
-        {/* Cuerpo Scrolleable */}
         <form id="form-visita" onSubmit={handleSubmit} className="overflow-y-auto p-4 space-y-4 text-xs">
           
           <div>
@@ -230,6 +241,16 @@ export default function ModalVisita({
               className="w-full h-12 px-3 rounded-2xl border border-slate-300 bg-white font-bold text-slate-900 text-xs sm:text-sm outline-none">
               {CAT_ACTIVIDAD_VISITA.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="block font-black text-slate-800 text-xs mb-1.5">Fecha y Hora de la Visita</label>
+            <input 
+              type="datetime-local"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="w-full h-12 px-3 rounded-2xl border border-slate-300 bg-white font-bold text-slate-900 text-xs sm:text-sm outline-none"
+            />
           </div>
 
           {/* Fotos de Evidencia */}
@@ -298,14 +319,14 @@ export default function ModalVisita({
               rows="3"
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
-              placeholder="Detalla avances, acuerdos con el residente o incidencias..."
+              placeholder="Detalla acuerdos, materiales recibidos o incidencias..."
               className="w-full p-3 rounded-2xl border border-slate-300 text-xs sm:text-sm font-medium outline-none focus:ring-2 focus:ring-[#0091FB] leading-relaxed"
             />
           </div>
 
         </form>
 
-        {/* Botón Fijo Inferior */}
+        {/* Botón Guardar */}
         <div className="p-4 bg-white border-t border-slate-100 shrink-0">
           <button
             type="submit"
@@ -313,7 +334,7 @@ export default function ModalVisita({
             disabled={subiendoArchivo}
             className="w-full min-h-[50px] rounded-2xl bg-[#001757] hover:bg-[#00227a] active:scale-98 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2">
             <Check className="w-5 h-5 stroke-[3]" />
-            <span>Completar Visita en Sitio</span>
+            <span>{visitaAEditar ? 'Guardar Cambios de la Visita' : 'Completar Visita en Sitio'}</span>
           </button>
         </div>
 

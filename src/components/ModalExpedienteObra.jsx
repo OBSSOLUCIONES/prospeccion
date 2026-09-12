@@ -1,10 +1,9 @@
-// src/components/ModalExpedienteObra.jsx
 import React, { useState } from 'react';
 import { 
   X, Calendar, Clock, Camera, ShieldCheck, AlertTriangle, Compass, 
   DollarSign, FileText, Phone, MessageCircle, Navigation, Plus, 
   FileSpreadsheet, User, Building2, MapPin, Pencil, Trash2,
-  ChevronRight, Link2, Receipt, FileCheck, CheckCircle2
+  ChevronRight, Link2, Receipt, FileCheck, CheckCircle2, Eye
 } from 'lucide-react';
 import { FASE_COLORS, CAT_FORMA_PAGO } from '../data/constants';
 
@@ -24,6 +23,8 @@ export default function ModalExpedienteObra({
   movimientos = [], 
   clientes = [],
   onNuevaVisita, 
+  onEditarVisita,
+  onEliminarVisita,
   onNuevoMovimiento,
   onEditarObra,
   onEliminarObra,
@@ -37,6 +38,9 @@ export default function ModalExpedienteObra({
   const [folioVenta, setFolioVenta] = useState('');
   const [tipoComprobanteVenta, setTipoComprobanteVenta] = useState('REMISIÓN');
   const [formaPagoVenta, setFormaPagoVenta] = useState('EFECTIVO');
+  
+  // ESTADO PARA ABRIR EL DETALLE COMPLETO DE UNA VISITA
+  const [visitaDetalle, setVisitaDetalle] = useState(null);
 
   if (!isOpen || !obra) return null;
 
@@ -61,7 +65,7 @@ export default function ModalExpedienteObra({
     const tel = clienteVinculado.contacto.replace(/\D/g, '');
     const telFinal = tel.length === 10 ? `52${tel}` : tel;
     const resp = clienteVinculado.responsable ? ` ${clienteVinculado.responsable}` : '';
-    const msg = encodeURIComponent(`Hola${resp}, te contacto de OBS respecto a la obra ${obra.nombre}.`);
+    const msg = encodeURIComponent(`HOLA${resp}, TE CONTACTO RESPECTO A LA OBRA ${obra.nombre}.`);
     window.open(`https://wa.me/${telFinal}?text=${msg}`, '_blank');
   };
 
@@ -86,7 +90,7 @@ export default function ModalExpedienteObra({
       tipoEntrega: cotizacionAConvertir.tipoEntrega || 'DOMICILIO',
       fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
       documentoAdjunto: cotizacionAConvertir.documentoAdjunto,
-      observaciones: `Venta cerrada a partir de la cotización ${cotizacionAConvertir.folio}`,
+      observaciones: `VENTA CERRADA A PARTIR DE COTIZACIÓN ${cotizacionAConvertir.folio}`,
       cotizacionOrigenId: cotizacionAConvertir.id
     };
 
@@ -100,7 +104,6 @@ export default function ModalExpedienteObra({
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
       <div className="w-full sm:max-w-3xl bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
         
-        {/* Barra de arrastre táctil (Android Bottom Sheet) */}
         <div className="pt-2 pb-1 sm:hidden">
           <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
         </div>
@@ -198,13 +201,13 @@ export default function ModalExpedienteObra({
         {/* CONTENIDO DE PESTAÑAS */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           
-          {/* BITÁCORA */}
+          {/* BITÁCORA EN FORMATO LISTA FLUIDA */}
           {subTab === 'bitacora' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-black text-[#001757]">Historial de Visitas de Campo</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Supervisiones técnicas registradas</p>
+                  <p className="text-[11px] text-slate-400 font-medium">Toca cualquier visita para ver sus fotos y detalles</p>
                 </div>
 
                 <button
@@ -222,52 +225,43 @@ export default function ModalExpedienteObra({
                   <p className="text-xs sm:text-sm font-bold text-slate-700">Sin visitas registradas aún</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {visitasObra.map((v, idx) => (
-                    <div key={v.id || idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 space-y-2.5">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="text-xs font-mono font-bold bg-white px-2.5 py-0.5 rounded-md border border-slate-200 text-slate-800">
-                          Visita #{visitasObra.length - idx} • {v.fecha}
-                        </span>
-
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                          Auditado GPS
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs flex-wrap">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${FASE_COLORS[v.estatus]}`}>
-                          {v.estatus}
-                        </span>
-                        <span className="font-bold text-[#001757] bg-blue-50 px-2 py-0.5 rounded-md">
-                          {v.actividad}
-                        </span>
-                      </div>
-
-                      {v.observaciones && (
-                        <p className="text-xs sm:text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
-                          "{v.observaciones}"
-                        </p>
-                      )}
-
-                      {v.fotos && v.fotos.length > 0 && (
-                        <div className="flex gap-2 overflow-x-auto pt-1">
-                          {v.fotos.map((foto, fIdx) => (
-                            <img
-                              key={fIdx}
-                              src={foto}
-                              alt="Evidencia"
-                              onClick={() => onVerVisor({
-                                tipo: 'foto',
-                                fotos: v.fotos,
-                                index: fIdx,
-                                titulo: `${obra.nombre} - ${v.fecha}`
-                              })}
-                              className="w-18 h-18 rounded-xl object-cover border-2 border-slate-200 cursor-pointer shrink-0 active:scale-95 transition-all"
-                            />
-                          ))}
+                    <div
+                      key={v.id || idx}
+                      onClick={() => setVisitaDetalle(v)}
+                      className="p-3.5 bg-slate-50 hover:bg-blue-50/70 border border-slate-200/90 hover:border-[#0091FB] rounded-2xl cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-3 group">
+                      
+                      <div className="min-w-0 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[#001757] shrink-0 font-bold shadow-2xs group-hover:border-[#0091FB]">
+                          <Calendar className="w-5 h-5 text-[#0091FB]" />
                         </div>
-                      )}
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                              {v.fecha}
+                            </p>
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black border uppercase ${FASE_COLORS[v.estatus]}`}>
+                              {v.estatus}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-semibold truncate mt-0.5">
+                            {v.actividad} • <strong className="text-slate-700">{v.asesorNombre || 'Asesor'}</strong>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {v.fotos && v.fotos.length > 0 && (
+                          <span className="text-[11px] font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1 rounded-xl flex items-center gap-1 shadow-2xs">
+                            <Camera className="w-3.5 h-3.5 text-[#0091FB]" />
+                            {v.fotos.length}
+                          </span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#0091FB] transition-colors" />
+                      </div>
+
                     </div>
                   ))}
                 </div>
@@ -360,7 +354,6 @@ export default function ModalExpedienteObra({
                           </div>
                         </div>
 
-                        {/* Acciones */}
                         <div className="flex items-center gap-1.5 shrink-0">
                           {esCotizacionPendiente && (
                             <button
@@ -506,6 +499,118 @@ export default function ModalExpedienteObra({
         </div>
 
       </div>
+
+      {/* =========================================================================
+          SUB-MODAL: DETALLE COMPLETO DE VISITA (CON EDITAR Y BORRAR INDIVIDUAL)
+         ========================================================================= */}
+      {visitaDetalle && (
+        <div className="fixed inset-0 z-[95] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
+            
+            {/* Cabecera del Detalle */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-black bg-blue-50 text-[#001757] px-2 py-0.5 rounded-md border border-blue-200">
+                    {visitaDetalle.id}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border uppercase ${FASE_COLORS[visitaDetalle.estatus]}`}>
+                    {visitaDetalle.estatus}
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-slate-900 mt-1">Supervisión Técnica</h3>
+                <p className="text-xs text-slate-500 font-semibold">{visitaDetalle.fecha}</p>
+              </div>
+
+              <button 
+                type="button"
+                onClick={() => setVisitaDetalle(null)} 
+                className="w-9 h-9 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 active:scale-90">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Metadatos y Auditoría */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-black uppercase text-slate-400 block">Asesor a Cargo</span>
+                <p className="font-black text-slate-900 mt-0.5">{visitaDetalle.asesorNombre || 'ASESOR'}</p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-black uppercase text-slate-400 block">Auditoría GPS</span>
+                <p className="font-black text-emerald-700 mt-0.5">
+                  {visitaDetalle.auditoriaEstado === 'en_sitio' ? 'En Sitio' : 'Remoto'} ({visitaDetalle.distanciaAuditoriaMetros || 0}m)
+                </p>
+              </div>
+            </div>
+
+            {/* Observaciones */}
+            <div className="space-y-1">
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Notas y Acuerdos de Campo</label>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 leading-relaxed">
+                {visitaDetalle.observaciones ? `"${visitaDetalle.observaciones}"` : 'Sin observaciones registradas.'}
+              </div>
+            </div>
+
+            {/* Galería de Fotos */}
+            {visitaDetalle.fotos && visitaDetalle.fotos.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  Evidencia Fotográfica ({visitaDetalle.fotos.length})
+                </label>
+                <div className="flex gap-2.5 overflow-x-auto pb-1">
+                  {visitaDetalle.fotos.map((f, fIdx) => (
+                    <img
+                      key={fIdx}
+                      src={f}
+                      alt="Evidencia"
+                      onClick={() => onVerVisor({
+                        tipo: 'foto',
+                        fotos: visitaDetalle.fotos,
+                        index: fIdx,
+                        titulo: `${obra.nombre} - ${visitaDetalle.fecha}`
+                      })}
+                      className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-200 cursor-pointer shrink-0 active:scale-95 shadow-sm"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* BOTONES DE ACCIÓN: EDITAR Y BORRAR EN SUPABASE */}
+            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
+              
+              <button
+                type="button"
+                onClick={() => {
+                  const target = visitaDetalle;
+                  setVisitaDetalle(null);
+                  onEditarVisita(target);
+                }}
+                className="min-h-[44px] px-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#001757] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all">
+                <Pencil className="w-4 h-4 text-[#0091FB]" />
+                <span>Editar Visita</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`¿Eliminar la visita del ${visitaDetalle.fecha} de forma permanente en Supabase?`)) {
+                    onEliminarVisita(visitaDetalle.id);
+                    setVisitaDetalle(null);
+                  }
+                }}
+                className="min-h-[44px] px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all">
+                <Trash2 className="w-4 h-4 text-rose-600" />
+                <span>Borrar Visita</span>
+              </button>
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* SUB-MODAL RÁPIDO: CONVERTIR COTIZACIÓN A VENTA */}
       {cotizacionAConvertir && (

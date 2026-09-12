@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { AlertTriangle, MapPin, Zap } from 'lucide-react';
@@ -39,6 +38,7 @@ import {
   eliminarObraDB,
   obtenerVisitasDB,
   guardarVisitaDB,
+  eliminarVisitaDB,
   obtenerMovimientosDB,
   guardarMovimientoDB,
   transmitirPosicionDB,
@@ -148,6 +148,7 @@ export default function App() {
 
   const [modalVisitaAbierto, setModalVisitaAbierto] = useState(false);
   const [obraParaVisita, setObraParaVisita] = useState(null);
+  const [visitaAEditar, setVisitaAEditar] = useState(null); // NUEVO: Estado para editar visitas
 
   const [modalComercialAbierto, setModalComercialAbierto] = useState(false);
   const [configComercial, setConfigComercial] = useState(null);
@@ -324,7 +325,6 @@ export default function App() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [usuarioActivo]);
 
-  // Guardar Obra (Seguro con Supabase)
   const handleGuardarObra = async (nuevaObra) => {
     const obraLimpia = sanitizarAMayusculas(nuevaObra);
     if (obraAEditar) {
@@ -338,7 +338,6 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // Guardar Cliente (Seguro con Supabase)
   const handleGuardarCliente = async (nuevoCliente) => {
     const clienteLimpio = sanitizarAMayusculas(nuevoCliente);
     if (clienteAEditar) {
@@ -351,7 +350,6 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // Eliminación con borrado en cascada en Supabase
   const ejecutarEliminacion = async () => {
     if (!itemAEliminar) return;
 
@@ -372,10 +370,17 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // Guardar Visita (Seguro con Supabase)
+  // Guardar o Actualizar Visita
   const handleGuardarVisita = async (nuevaVisita) => {
     const visitaLimpia = sanitizarAMayusculas(nuevaVisita);
-    setVisitas(prev => [visitaLimpia, ...prev]);
+    setVisitas(prev => {
+      const existe = prev.some(v => v.id === visitaLimpia.id);
+      if (existe) {
+        return prev.map(v => v.id === visitaLimpia.id ? visitaLimpia : v);
+      }
+      return [visitaLimpia, ...prev];
+    });
+
     setObras(prev => prev.map(o => {
       if (o.id === visitaLimpia.obraId) {
         const obraActualizada = { ...o, estatusFase: visitaLimpia.estatus };
@@ -387,10 +392,18 @@ export default function App() {
     }));
 
     await guardarVisitaDB(visitaLimpia);
+    setVisitaAEditar(null);
     refrescarConteoOffline();
   };
 
-  // Guardar Venta o Cotización (Seguro con Supabase)
+  // Eliminar Visita individual en Supabase y localmente
+  const handleEliminarVisita = async (visitaId) => {
+    const idLimpio = String(visitaId).trim().toUpperCase();
+    setVisitas(prev => prev.filter(v => v.id !== idLimpio));
+    await eliminarVisitaDB(idLimpio);
+    refrescarConteoOffline();
+  };
+
   const handleGuardarMovimiento = async (nuevoMov) => {
     const movLimpio = sanitizarAMayusculas(nuevoMov);
     setMovimientos(prev => {
@@ -620,6 +633,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
+                setVisitaAEditar(null);
                 setObraParaVisita(obraProxima.obra);
                 setModalVisitaAbierto(true);
               }}
@@ -652,6 +666,7 @@ export default function App() {
             usuarioActivo={usuarioActivo}
             tabletPos={tabletPos}
             onNuevaVisita={(obra) => {
+              setVisitaAEditar(null);
               setObraParaVisita(obra);
               setModalVisitaAbierto(true);
             }}
@@ -698,10 +713,10 @@ export default function App() {
         )}
       </main>
 
-      {/* BARRA DE NAVEGACIÓN INFERIOR */}
+      {/* BARRA INFERIOR */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* MODALES */}
+      {/* PANEL METAS */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
@@ -720,6 +735,7 @@ export default function App() {
         onSeleccionarSucursal={(suc) => setFiltroSucursal(suc)}
       />
 
+      {/* EXPEDIENTE 360° (CON GESTIÓN DE VISITAS) */}
       <ModalExpedienteObra
         isOpen={Boolean(obraSeleccionada)}
         onClose={() => setObraSeleccionada(null)}
@@ -728,9 +744,16 @@ export default function App() {
         movimientos={movimientos}
         clientes={clientes}
         onNuevaVisita={(obra) => {
+          setVisitaAEditar(null);
           setObraParaVisita(obra);
           setModalVisitaAbierto(true);
         }}
+        onEditarVisita={(visita) => {
+          setVisitaAEditar(visita);
+          setObraParaVisita(obras.find(o => o.id === visita.obraId) || obraSeleccionada);
+          setModalVisitaAbierto(true);
+        }}
+        onEliminarVisita={handleEliminarVisita}
         onNuevoMovimiento={({ obra, tipo }) => {
           setConfigComercial({ obra, tipo });
           setModalComercialAbierto(true);
@@ -748,6 +771,7 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
+      {/* ALTA / EDICIÓN DE OBRA */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -760,6 +784,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
+      {/* ALTA / EDICIÓN DE CLIENTE */}
       <ModalCliente
         isOpen={modalCliente}
         onClose={() => { setModalCliente(false); setClienteAEditar(null); }}
@@ -771,15 +796,18 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
+      {/* CHECK-IN Y EDICIÓN DE VISITAS */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
-        onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); }}
+        onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); setVisitaAEditar(null); }}
         obra={obraParaVisita}
         onSave={handleGuardarVisita}
         tabletPos={tabletPos}
         usuarioActivo={usuarioActivo}
+        visitaAEditar={visitaAEditar}
       />
 
+      {/* MODAL COMERCIAL */}
       <ModalComercial
         isOpen={modalComercialAbierto}
         onClose={() => { setModalComercialAbierto(false); setConfigComercial(null); }}
@@ -788,6 +816,7 @@ export default function App() {
         onSave={handleGuardarMovimiento}
       />
 
+      {/* SELECTOR GPS */}
       {mapaPickerConfig && (
         <ModalMapaPicker 
           isOpen={true}
@@ -801,17 +830,20 @@ export default function App() {
         />
       )}
 
+      {/* NAVEGACIÓN GPS */}
       <ModalNavegacion 
         isOpen={Boolean(destinoRuta)}
         onClose={() => setDestinoRuta(null)}
         destino={destinoRuta}
       />
 
+      {/* VISOR MULTIMEDIA */}
       <ModalVisor 
         visorModal={visorModal}
         onClose={() => setVisorModal(null)}
       />
 
+      {/* CONFIRMACIÓN DE BORRADO DE OBRA / CLIENTE */}
       {itemAEliminar && (
         <div className="fixed inset-0 z-[110] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200">
