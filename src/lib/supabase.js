@@ -279,7 +279,6 @@ export async function guardarClienteDB(cliente) {
   try {
     const { error } = await supabase.from('clientes').upsert(fila);
     if (error) {
-      console.error('Error guardando cliente en Supabase:', error);
       alert(`⚠️ Error guardando cliente en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
     } else {
@@ -321,13 +320,13 @@ export async function obtenerObrasDB() {
     if (error) return null;
     return data.map(o => ({
       id: o.id,
-      nombre: o.nombre,
+      nombre: o.nombre || o.proyecto || '',
       sucursal: o.sucursal,
       clienteId: o.cliente_id || null,
       tipoDesarrollo: o.tipo_desarrollo || 'OBRA NUEVA',
       estatusFase: o.estatus_fase || 'CIMENTACIÓN',
       estadoObra: o.estado_obra || 'ACTIVA',
-      direccion: o.direccion || '',
+      direccion: o.direccion || o.direccion_obra || '',
       lat: o.lat ? parseFloat(o.lat) : null,
       lng: o.lng ? parseFloat(o.lng) : null,
       createdAt: o.created_at
@@ -338,9 +337,12 @@ export async function obtenerObrasDB() {
 }
 
 export async function guardarObraDB(obra) {
+  const nombreFinal = String(obra.nombre || obra.proyecto || '').trim().toUpperCase();
+
   const fila = {
     id: String(obra.id).trim().toUpperCase(),
-    nombre: String(obra.nombre || '').trim().toUpperCase(),
+    nombre: nombreFinal,
+    proyecto: nombreFinal, // Se envían ambos por compatibilidad total
     sucursal: String(obra.sucursal || 'ALTOZANO').trim().toUpperCase(),
     cliente_id: (obra.clienteId && String(obra.clienteId).trim() !== '' && obra.clienteId !== 'SIN_CLIENTE') 
       ? String(obra.clienteId).trim().toUpperCase() 
@@ -362,7 +364,6 @@ export async function guardarObraDB(obra) {
     const { error } = await supabase.from('obras').upsert(fila);
     if (error) {
       console.warn('Aviso Supabase al guardar obra:', error.message);
-      // Si la llave de cliente falló, intentamos guardar sin cliente_id para asegurar la obra
       if (error.message && (error.message.includes('cliente_id') || error.code === '23503')) {
         fila.cliente_id = null;
         const reintento = await supabase.from('obras').upsert(fila);
@@ -392,10 +393,8 @@ export async function eliminarObraDB(id) {
     return;
   }
   try {
-    // 1. Limpieza en cascada de hijos primero
     await supabase.from('movimientos_comerciales').delete().eq('obra_id', idLimpio);
     await supabase.from('visitas').delete().eq('obra_id', idLimpio);
-    // 2. Borrar obra
     const { error } = await supabase.from('obras').delete().eq('id', idLimpio);
     if (error) {
       alert(`⚠️ Error eliminando obra en Supabase: ${error.message}`);
@@ -409,7 +408,7 @@ export async function eliminarObraDB(id) {
 }
 
 // ==========================================
-// CRUD VISITAS
+// CRUD VISITAS (CON COMPATIBILIDAD PROYECTO / OBRA_ID)
 // ==========================================
 export async function obtenerVisitasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -418,7 +417,7 @@ export async function obtenerVisitasDB() {
     if (error) return null;
     return data.map(v => ({
       id: v.id,
-      obraId: v.obra_id,
+      obraId: v.obra_id || v.proyecto,
       sucursal: v.sucursal,
       fecha: v.fecha,
       asesorNombre: v.asesor_nombre,
@@ -437,9 +436,12 @@ export async function obtenerVisitasDB() {
 }
 
 export async function guardarVisitaDB(visita) {
+  const nombreProyecto = String(visita.obraNombre || visita.proyecto || visita.obraId || 'OBRA').trim().toUpperCase();
+
   const fila = {
     id: String(visita.id).trim().toUpperCase(),
     obra_id: String(visita.obraId).trim().toUpperCase(),
+    proyecto: nombreProyecto, // Se envía 'proyecto' para satisfacer la columna de Supabase
     sucursal: String(visita.sucursal || 'ALTOZANO').trim().toUpperCase(),
     fecha: String(visita.fecha || '').trim(),
     asesor_nombre: String(visita.asesorNombre || 'ASESOR').trim().toUpperCase(),
