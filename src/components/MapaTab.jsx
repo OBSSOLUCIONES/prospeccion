@@ -1,8 +1,8 @@
 // src/components/MapaTab.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Navigation, Radio, Layers, Crosshair } from 'lucide-react';
+import { Navigation, Radio, Layers, Crosshair, Route, Download, Calendar, UserCheck } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
 const SUCURSAL_COORDS = {
@@ -56,7 +56,18 @@ const tuDispositivoIcon = L.divIcon({
   iconAnchor: [12, 12]
 });
 
-// CONTROLADOR PASIVO: Únicamente ejecuta acciones cuando tú presionas un botón
+// Icono con número de parada para la ruta de auditoría
+const crearIconoParada = (numero) => L.divIcon({
+  className: 'bg-transparent border-none',
+  html: `
+    <div style="filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4)); display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #001757; color: white; border: 2.5px solid #0091FB; font-weight: 900; font-size: 12px; font-family: Montserrat, sans-serif;">
+      ${numero}
+    </div>
+  `,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14]
+});
+
 function AccionesUsuarioEnMapa({ vueloDestino, onVueloCompletado }) {
   const map = useMap();
 
@@ -83,12 +94,17 @@ export default function MapaTab({
   const [verClientes, setVerClientes] = useState(true);
   const [ordenVuelo, setOrdenVuelo] = useState(null);
 
+  // MODO FLOTILLA / AUDITORÍA DE RUTAS (PIN 9999)
+  const [modoRutaFlotilla, setModoRutaFlotilla] = useState(false);
+  const hoyStr = new Date().toISOString().slice(0, 10);
+  const [fechaRuta, setFechaRuta] = useState(hoyStr);
+  const [asesorSeleccionado, setAsesorSeleccionado] = useState('TODOS');
+
   const centroInicial = [tabletPos?.lat || 19.6642, tabletPos?.lng || -101.1718];
 
   const obrasPorSucursal = obras.filter(o => filtroSucursal === 'TODAS' || o.sucursal === filtroSucursal);
   const clientesPorSucursal = clientes.filter(c => filtroSucursal === 'TODAS' || c.sucursal === filtroSucursal);
 
-  // Obras reales georreferenciadas (incluso si no tienen visitas aún)
   const obrasConCoordenadas = obrasPorSucursal
     .filter(o => o.lat && o.lng)
     .map(o => ({
@@ -96,6 +112,130 @@ export default function MapaTab({
       latFinal: parseFloat(o.lat),
       lngFinal: parseFloat(o.lng)
     }));
+
+  // Lista única de asesores que han hecho visitas
+  const listaAsesores = useMemo(() => {
+    const nombres = visitas.map(v => v.asesorNombre).filter(Boolean);
+    return Array.from(new Set(nombres));
+  }, [visitas]);
+
+  // Visitas ordenadas para trazar la ruta de flotilla
+  const visitasDeRuta = useMemo(() => {
+    if (!modoRutaFlotilla) return [];
+    return visitas
+      .filter(v => {
+        const coincideFecha = v.fecha && v.fecha.startsWith(fechaRuta);
+        const coincideAsesor = asesorSeleccionado === 'TODOS' || v.asesorNombre === asesorSeleccionado;
+        const tieneGps = Boolean(v.latGpsReal && v.lngGpsReal);
+        return coincideFecha && coincideAsesor && tieneGps;
+      })
+      .sort((a, b) => new Date(a.fecha.replace(' ', 'T')) - new Date(b.fecha.replace(' ', 'T')));
+  }, [visitas, modoRutaFlotilla, fechaRuta, asesorSeleccionado]);
+
+  const puntosPolilinea = visitasDeRuta.map(v => [parseFloat(v.latGpsReal), parseFloat(v.lngGpsReal)]);
+
+  // GENERAR Y DESCARGAR IMAGEN DE LA RUTA EN PNG (ESTILO REPORTE LOGÍSTICO)
+  const descargarImagenRuta = () => {
+    if (!visitasDeRuta.length) {
+      alert('No hay visitas registradas para este asesor en la fecha seleccionada.');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 1150;
+    const ctx = canvas.getContext('2d');
+
+    // Fondo
+    ctx.fillStyle = '#0B1120';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Cabecera Corporativa
+    ctx.fillStyle = '#001757';
+    ctx.fillRect(0, 0, canvas.width, 130);
+
+    ctx.fillStyle = '#0091FB';
+    ctx.font = 'bold 22px Montserrat, sans-serif';
+    ctx.fillText('AUDITORÍA DE RUTAS Y RECORRIDOS EN CAMPO', 40, 50);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 15px Montserrat, sans-serif';
+    ctx.fillText(`Asesor: ${asesorSeleccionado}  |  Fecha: ${fechaRuta}`, 40, 85);
+
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '13px Montserrat, sans-serif';
+    ctx.fillText(`Total de Paradas Registradas: ${visitasDeRuta.length} puntos de supervisión`, 40, 110);
+
+    // Tarjeta Resumen
+    ctx.fillStyle = '#1E293B';
+    ctx.roundRect(40, 150, 820, 90, 16);
+    ctx.fill();
+
+    ctx.fillStyle = '#38BDF8';
+    ctx.font = 'bold 14px Montserrat, sans-serif';
+    ctx.fillText('ESTADÍSTICAS DEL RECORRIDO', 60, 180);
+
+    ctx.fillStyle = '#F8FAFC';
+    ctx.font = '13px Montserrat, sans-serif';
+    const primerPunto = visitasDeRuta[0]?.fecha.split(' ')[1] || '--';
+    const ultimoPunto = visitasDeRuta[visitasDeRuta.length - 1]?.fecha.split(' ')[1] || '--';
+    ctx.fillText(`Inicio de Ruta: ${primerPunto} hrs    |    Fin de Ruta: ${ultimoPunto} hrs`, 60, 210);
+
+    // Timeline de Paradas
+    ctx.fillStyle = '#38BDF8';
+    ctx.font = 'bold 16px Montserrat, sans-serif';
+    ctx.fillText('SECUENCIA CRONOLÓGICA DE PARADAS (GPS AUDITADO)', 40, 280);
+
+    let y = 320;
+    visitasDeRuta.forEach((v, index) => {
+      if (y > 1050) return;
+      const obra = obras.find(o => o.id === v.obraId);
+      const nombreObra = obra ? obra.nombre : `Obra ${v.obraId}`;
+
+      // Caja de parada
+      ctx.fillStyle = '#1E293B';
+      ctx.roundRect(40, y, 820, 70, 12);
+      ctx.fill();
+
+      // Círculo con número
+      ctx.fillStyle = '#0091FB';
+      ctx.beginPath();
+      ctx.arc(75, y + 35, 18, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px Montserrat, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(index + 1), 75, y + 40);
+      ctx.textAlign = 'left';
+
+      // Detalles de la parada
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px Montserrat, sans-serif';
+      ctx.fillText(nombreObra, 110, y + 30);
+
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '12px Montserrat, sans-serif';
+      ctx.fillText(
+        `Hora: ${v.fecha.split(' ')[1] || v.fecha}  •  Fase: ${v.estatus}  •  Auditoría: ${v.auditoriaEstado === 'en_sitio' ? 'En Sitio (Válido)' : 'Remoto'} (${v.distanciaAuditoriaMetros}m)`,
+        110,
+        y + 52
+      );
+
+      y += 82;
+    });
+
+    // Pie de página
+    ctx.fillStyle = '#64748B';
+    ctx.font = '11px Montserrat, sans-serif';
+    ctx.fillText('Generado automáticamente por Control de Obras - Red Azul • Certificado de Auditoría GPS', 40, 1120);
+
+    // Descarga automática en PNG
+    const link = document.createElement('a');
+    link.download = `Reporte_Ruta_${asesorSeleccionado}_${fechaRuta}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
 
   const handleCambiarSucursal = (sucursalSeleccionada) => {
     setFiltroSucursal(sucursalSeleccionada);
@@ -138,40 +278,96 @@ export default function MapaTab({
             </div>
           </div>
 
-          <select
-            value={filtroSucursal}
-            onChange={(e) => handleCambiarSucursal(e.target.value)}
-            className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black text-[#001757] outline-none">
-            <option value="TODAS">Todas las Sucursales ({SUCURSALES.length})</option>
-            {SUCURSALES.map(s => (
-              <option key={s.codigo} value={s.nombre}>{s.nombre} ({s.codigo})</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+            {/* Botón Modo Flotilla */}
+            <button
+              type="button"
+              onClick={() => setModoRutaFlotilla(!modoRutaFlotilla)}
+              className={`py-2 px-3 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-xs ${
+                modoRutaFlotilla 
+                  ? 'bg-[#001757] text-white' 
+                  : 'bg-blue-50 text-[#001757] border border-blue-200 hover:bg-blue-100'
+              }`}>
+              <Route className="w-3.5 h-3.5 text-[#0091FB]" />
+              <span>{modoRutaFlotilla ? 'Ver Mapa Normal' : '🚗 Rutas de Flotilla'}</span>
+            </button>
+
+            <select
+              value={filtroSucursal}
+              onChange={(e) => handleCambiarSucursal(e.target.value)}
+              className="py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black text-[#001757] outline-none flex-1 sm:flex-initial">
+              <option value="TODAS">Todas las Sucursales</option>
+              {SUCURSALES.map(s => (
+                <option key={s.codigo} value={s.nombre}>{s.nombre} ({s.codigo})</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-1 border-t border-slate-100 flex-wrap">
-          <span className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
-            <Layers className="w-3 h-3" /> Ver:
-          </span>
+        {/* PANEL DE CONTROL DE RUTA CUANDO EL MODO FLOTILLA ESTÁ ACTIVO */}
+        {modoRutaFlotilla ? (
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="date"
+                  value={fechaRuta}
+                  onChange={(e) => setFechaRuta(e.target.value)}
+                  className="bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-lg px-2 py-1 outline-none"
+                />
+              </div>
 
-          <button
-            type="button"
-            onClick={() => setVerObras(!verObras)}
-            className={`text-xs px-2.5 py-1 rounded-xl font-bold transition-all ${
-              verObras ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-400 opacity-60'
-            }`}>
-            🏗️ Obras ({obrasConCoordenadas.length})
-          </button>
+              <div className="flex items-center gap-1">
+                <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={asesorSeleccionado}
+                  onChange={(e) => setAsesorSeleccionado(e.target.value)}
+                  className="bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-lg px-2 py-1 outline-none">
+                  <option value="TODOS">Todos los Asesores</option>
+                  {listaAsesores.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
 
-          <button
-            type="button"
-            onClick={() => setVerClientes(!verClientes)}
-            className={`text-xs px-2.5 py-1 rounded-xl font-bold transition-all ${
-              verClientes ? 'bg-blue-50 text-[#001757] border border-blue-200' : 'bg-slate-100 text-slate-400 opacity-60'
-            }`}>
-            🏢 Clientes ({clientesPorSucursal.length})
-          </button>
-        </div>
+              <span className="text-[11px] font-bold text-[#001757] bg-blue-100 px-2 py-0.5 rounded-md">
+                {visitasDeRuta.length} paradas
+              </span>
+            </div>
+
+            {/* BOTÓN DESCARGA DE REPORTE EN IMAGEN */}
+            <button
+              type="button"
+              onClick={descargarImagenRuta}
+              className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 active:scale-95 transition-all">
+              <Download className="w-3.5 h-3.5" />
+              <span>Descargar Imagen de Ruta</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-100 flex-wrap">
+            <span className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+              <Layers className="w-3 h-3" /> Ver:
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setVerObras(!verObras)}
+              className={`text-xs px-2.5 py-1 rounded-xl font-bold transition-all ${
+                verObras ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-400 opacity-60'
+              }`}>
+              🏗️ Obras ({obrasConCoordenadas.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setVerClientes(!verClientes)}
+              className={`text-xs px-2.5 py-1 rounded-xl font-bold transition-all ${
+                verClientes ? 'bg-blue-50 text-[#001757] border border-blue-200' : 'bg-slate-100 text-slate-400 opacity-60'
+              }`}>
+              🏢 Clientes ({clientesPorSucursal.length})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* CONTENEDOR DEL MAPA */}
@@ -221,8 +417,32 @@ export default function MapaTab({
             </Marker>
           )}
 
-          {/* PINES DE OBRAS (Ahora muestra todas las obras) */}
-          {verObras && obrasConCoordenadas.map(obra => (
+          {/* LÍNEA DE RUTA Y PARADAS NUMERADAS (MODO FLOTILLA) */}
+          {modoRutaFlotilla && puntosPolilinea.length > 1 && (
+            <Polyline
+              positions={puntosPolilinea}
+              pathOptions={{ color: '#0091FB', weight: 4, dashArray: '6, 8' }}
+            />
+          )}
+
+          {modoRutaFlotilla && visitasDeRuta.map((v, idx) => (
+            <Marker
+              key={`parada-${v.id}`}
+              position={[parseFloat(v.latGpsReal), parseFloat(v.lngGpsReal)]}
+              icon={crearIconoParada(idx + 1)}>
+              <Popup>
+                <div className="text-xs space-y-1">
+                  <span className="font-bold text-[#001757]">Parada #{idx + 1}</span>
+                  <p className="font-bold text-slate-800">Hora: {v.fecha.split(' ')[1] || v.fecha}</p>
+                  <p className="text-[10px] text-slate-500">Asesor: {v.asesorNombre}</p>
+                  <p className="text-[10px] font-bold text-emerald-700">Auditoría: {v.distanciaAuditoriaMetros}m</p>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+          {/* PINES DE OBRAS (MODO NORMAL) */}
+          {!modoRutaFlotilla && verObras && obrasConCoordenadas.map(obra => (
             <Marker key={`obra-${obra.id}`} position={[obra.latFinal, obra.lngFinal]} icon={obraIcon}>
               <Popup>
                 <div className="text-xs space-y-1.5 min-w-[170px]">
@@ -233,9 +453,6 @@ export default function MapaTab({
                     <h4 className="font-black text-slate-900 text-xs leading-tight mt-1 truncate">{obra.nombre}</h4>
                     <p className="text-[10px] text-slate-500 font-bold mt-0.5">
                       {obra.sucursal} • {obra.estatusFase}
-                    </p>
-                    <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
-                      {obra.direccion || 'Ubicación satelital'}
                     </p>
                   </div>
                   
@@ -255,8 +472,8 @@ export default function MapaTab({
             </Marker>
           ))}
 
-          {/* PINES DE CLIENTES */}
-          {verClientes && clientesPorSucursal.filter(c => c.lat && c.lng).map(c => (
+          {/* PINES DE CLIENTES (MODO NORMAL) */}
+          {!modoRutaFlotilla && verClientes && clientesPorSucursal.filter(c => c.lat && c.lng).map(c => (
             <Marker key={`cliente-${c.id}`} position={[parseFloat(c.lat), parseFloat(c.lng)]} icon={clienteIcon}>
               <Popup>
                 <div className="text-xs space-y-1.5 min-w-[170px]">

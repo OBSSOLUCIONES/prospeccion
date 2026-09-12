@@ -135,7 +135,7 @@ export default function App() {
     itemAEliminar
   );
 
-  // DETECCIÓN INTELIGENTE DE PROXIMIDAD (<180M DE UNA OBRA)
+  // DETECCIÓN INTELIGENTE DE PROXIMIDAD: ¿ESTÁ EL ASESOR A MENOS DE 180M DE ALGUNA OBRA?
   const obraProxima = useMemo(() => {
     if (!tabletPos?.lat || !tabletPos?.lng) return null;
     for (const o of obras) {
@@ -196,7 +196,7 @@ export default function App() {
     }
   }, [recargarDatosNube, esDirector]);
 
-  // Persistencia local
+  // Persistencia local de respaldo
   useEffect(() => { localStorage.setItem('app_obras_maestras', JSON.stringify(obras)); }, [obras]);
   useEffect(() => { localStorage.setItem('app_obras_bitacora_visitas', JSON.stringify(visitas)); }, [visitas]);
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
@@ -330,7 +330,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR POWER BI LIMPIO
+  // EXPORTADOR POWER BI
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -412,7 +412,7 @@ export default function App() {
       };
     });
 
-    // 3. Fact_Visitas (Limpio sin firma)
+    // 3. Fact_Visitas
     const hojaVisitas = visitas.map(v => ({
       visita_id: v.id,
       obra_id: v.obraId,
@@ -426,6 +426,7 @@ export default function App() {
       latitud_real_gps: v.latGpsReal ? Number(parseFloat(v.latGpsReal).toFixed(6)) : null,
       longitud_real_gps: v.lngGpsReal ? Number(parseFloat(v.lngGpsReal).toFixed(6)) : null,
       cantidad_fotos: (v.fotos || []).length,
+      tiene_firma_digital: v.firmaDigital ? 'SI' : 'NO',
       observaciones: v.observaciones || ''
     }));
 
@@ -485,7 +486,7 @@ export default function App() {
         onAbrirKpis={() => setModalKpisAbierto(true)}
       />
 
-      {/* BANNER INTELIGENTE: PROXIMIDAD A OBRA */}
+      {/* BANNER INTELIGENTE: DETECTA CUANDO LLEGAS A UNA OBRA POR GPS */}
       {obraProxima && !algunModalAbierto && (
         <div className="mx-3 mt-2.5 p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
           <div className="min-w-0">
@@ -647,7 +648,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* CHECK-IN VISITA LIMPIO */}
+      {/* CHECK-IN VISITA CON FIRMA */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
         onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); }}

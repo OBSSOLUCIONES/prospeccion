@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Camera, Image as ImageIcon, Loader2, 
-  Mic, MicOff, Check
+  Mic, MicOff, Check, PenTool, RotateCcw
 } from 'lucide-react';
 import { FASES_OBRA, CAT_ACTIVIDAD_VISITA } from '../data/constants';
 import { subirArchivoSupabase } from '../lib/supabase';
@@ -47,6 +47,11 @@ export default function ModalVisita({
   const [subiendoArchivo, setSubiendoArchivo] = useState(false);
   const [grabandoVoz, setGrabandoVoz] = useState(false);
 
+  // Estados para Firma Digital
+  const canvasFirmaRef = useRef(null);
+  const [firmando, setFirmando] = useState(false);
+  const [tieneFirma, setTieneFirma] = useState(false);
+
   const recognitionRef = useRef(null);
   const debeSeguirGrabandoRef = useRef(false);
 
@@ -57,6 +62,8 @@ export default function ModalVisita({
     setFecha(obtenerFechaHoraActual());
     setObservaciones('');
     setFotos([]);
+    setTieneFirma(false);
+    limpiarFirma();
 
     return () => {
       debeSeguirGrabandoRef.current = false;
@@ -65,6 +72,50 @@ export default function ModalVisita({
       }
     };
   }, [obra, isOpen]);
+
+  // Dibujo táctil en Canvas para la firma
+  const iniciarTrazo = (e) => {
+    const canvas = canvasFirmaRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    setFirmando(true);
+  };
+
+  const dibujarTrazo = (e) => {
+    if (!firmando) return;
+    const canvas = canvasFirmaRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#001757';
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+    setTieneFirma(true);
+  };
+
+  const detenerTrazo = () => {
+    setFirmando(false);
+  };
+
+  const limpiarFirma = () => {
+    const canvas = canvasFirmaRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setTieneFirma(false);
+  };
 
   if (!isOpen || !obra) return null;
 
@@ -152,6 +203,12 @@ export default function ModalVisita({
     if (distancia > 1000) auditoriaEstado = 'remoto';
     else if (distancia > 250) auditoriaEstado = 'perimetro';
 
+    // Capturar firma en imagen base64 si se realizó trazo
+    let firmaBase64 = null;
+    if (tieneFirma && canvasFirmaRef.current) {
+      firmaBase64 = canvasFirmaRef.current.toDataURL('image/png');
+    }
+
     onSave({
       id: `VIS-${Date.now().toString().slice(-6)}`,
       obraId: obra.id,
@@ -162,6 +219,7 @@ export default function ModalVisita({
       actividad,
       observaciones,
       fotos,
+      firmaDigital: firmaBase64,
       latGpsReal,
       lngGpsReal,
       distanciaAuditoriaMetros: distancia,
@@ -283,12 +341,50 @@ export default function ModalVisita({
             </div>
 
             <textarea
-              rows="3"
+              rows="2"
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
               placeholder="Escribe o dicta los detalles del avance en obra..."
               className="w-full p-3 rounded-xl border border-slate-300 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {/* FIRMA DIGITAL CON EL DEDO (VO.BO. RESIDENTE / ENCARGADO) */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-slate-800">
+                <PenTool className="w-3.5 h-3.5 text-[#001757]" />
+                <span className="font-black text-xs">Firma de Vo.Bo. en Sitio (Con el dedo)</span>
+              </div>
+              <button
+                type="button"
+                onClick={limpiarFirma}
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1">
+                <RotateCcw className="w-3 h-3" />
+                <span>Borrar Firma</span>
+              </button>
+            </div>
+
+            <div className="w-full bg-white rounded-xl border-2 border-dashed border-slate-300 relative overflow-hidden touch-none h-28 flex items-center justify-center">
+              <canvas
+                ref={canvasFirmaRef}
+                width={380}
+                height={110}
+                onMouseDown={iniciarTrazo}
+                onMouseMove={dibujarTrazo}
+                onMouseUp={detenerTrazo}
+                onMouseLeave={detenerTrazo}
+                onTouchStart={iniciarTrazo}
+                onTouchMove={dibujarTrazo}
+                onTouchEnd={detenerTrazo}
+                className="w-full h-full cursor-crosshair"
+              />
+              {!tieneFirma && (
+                <span className="absolute pointer-events-none text-slate-300 text-[11px] font-semibold">
+                  Firma aquí con tu dedo para autorizar la visita
+                </span>
+              )}
+            </div>
           </div>
 
         </form>
