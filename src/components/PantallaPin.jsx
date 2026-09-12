@@ -1,6 +1,6 @@
 // src/components/PantallaPin.jsx
 import React, { useState } from 'react';
-import { Compass, Delete, ShieldCheck, Lock } from 'lucide-react';
+import { Delete, ShieldCheck, Lock } from 'lucide-react';
 
 export default function PantallaPin({ usuarios, onLogin }) {
   const [pin, setPin] = useState('');
@@ -41,10 +41,16 @@ export default function PantallaPin({ usuarios, onLogin }) {
   return (
     <div className="fixed inset-0 z-[120] bg-[#000b26] flex flex-col items-center justify-between p-6 sm:p-8 select-none animate-in fade-in duration-300">
       
-      {/* Cabecera y Branding Homologado PROSPECCIÓN OBS */}
+      {/* Cabecera y Tu Logo PROSPECCIÓN OBS */}
       <div className="flex flex-col items-center pt-4 sm:pt-8 text-center space-y-2.5">
-        <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-[#001757] via-[#00227a] to-[#0091FB] flex items-center justify-center text-white shadow-xl shadow-[#0091FB]/20 border border-white/20">
-          <Compass className="w-8 h-8 text-[#0091FB] stroke-[2.4]" />
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-br from-[#001757] via-[#00227a] to-[#0091FB] p-1 shadow-xl shadow-[#0091FB]/20 border border-white/20 flex items-center justify-center">
+          <div className="w-full h-full rounded-[22px] bg-[#000f38] flex items-center justify-center p-2">
+            <img 
+              src="./logo.png" 
+              alt="PROSPECCIÓN OBS" 
+              className="w-full h-full object-contain"
+            />
+          </div>
         </div>
         <div>
           <span className="text-[11px] font-black uppercase tracking-[0.25em] text-[#0091FB]">
@@ -81,7 +87,7 @@ export default function PantallaPin({ usuarios, onLogin }) {
         )}
       </div>
 
-      {/* Teclado Numérico Ergonómico de Alto Contraste para Tablets y Fundas de Uso Rudo */}
+      {/* Teclado Numérico Ergonómico */}
       <div className="w-full max-w-xs sm:max-w-sm space-y-4">
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
@@ -94,7 +100,6 @@ export default function PantallaPin({ usuarios, onLogin }) {
             </button>
           ))}
 
-          {/* Fila inferior */}
           <div />
           <button
             type="button"

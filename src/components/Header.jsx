@@ -1,6 +1,6 @@
 // src/components/Header.jsx
 import React from 'react';
-import { Compass, FileSpreadsheet, Lock, RefreshCw, Target, Wifi, WifiOff, CloudUpload, CloudCheck } from 'lucide-react';
+import { FileSpreadsheet, Lock, Target, Wifi, WifiOff, CloudUpload } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
 export default function Header({ 
@@ -21,10 +21,16 @@ export default function Header({
   return (
     <header className="fixed top-0 left-0 right-0 z-30 h-[58px] sm:h-[64px] bg-white/95 backdrop-blur-xl border-b border-slate-200/90 px-3 sm:px-5 flex items-center justify-between gap-2 shadow-sm safe-top">
       
-      {/* Logotipo e Identidad PROSPECCIÓN OBS */}
+      {/* Tu Logotipo en el Header */}
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-        <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-2xl bg-gradient-to-br from-[#001757] via-[#00227a] to-[#0091FB] flex items-center justify-center text-white shadow-md shadow-[#0091FB]/20 border border-white/20">
-          <Compass className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.4] text-[#0091FB]" />
+        <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-2xl bg-gradient-to-br from-[#001757] via-[#00227a] to-[#0091FB] p-0.5 shadow-md shadow-[#0091FB]/20 border border-white/20 flex items-center justify-center">
+          <div className="w-full h-full rounded-[14px] bg-[#000f38] flex items-center justify-center p-1">
+            <img 
+              src="./logo.png" 
+              alt="OBS" 
+              className="w-full h-full object-contain"
+            />
+          </div>
         </div>
 
         <div className="min-w-0">
@@ -58,10 +64,9 @@ export default function Header({
         </div>
       </div>
 
-      {/* Controles del Header: Telemetría Offline + Botones */}
+      {/* Controles: Telemetría Offline + Botones */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
         
-        {/* Píldora de Telemetría Offline / Online */}
         {pendientesOffline > 0 ? (
           <button
             type="button"
@@ -88,7 +93,6 @@ export default function Header({
           </span>
         )}
 
-        {/* Selector de Sucursales para el Director */}
         {esDirector && (
           <select
             value={filtroSucursal}
@@ -103,7 +107,6 @@ export default function Header({
           </select>
         )}
 
-        {/* Botón de Metas */}
         <button
           type="button"
           onClick={onAbrirKpis}
@@ -113,7 +116,6 @@ export default function Header({
           <span className="hidden md:inline">Metas</span>
         </button>
 
-        {/* Exportar a Excel Power BI */}
         {esDirector && (
           <button
             type="button"
@@ -125,7 +127,6 @@ export default function Header({
           </button>
         )}
 
-        {/* Perfil del Usuario */}
         {usuarioActivo && (
           <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 pl-1 pr-1.5 py-0.5 rounded-xl">
             <div className="w-6 h-6 rounded-lg bg-[#001757] text-[#0091FB] font-black text-[10px] flex items-center justify-center uppercase shadow-2xs">
