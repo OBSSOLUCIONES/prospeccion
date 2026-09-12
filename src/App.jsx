@@ -60,7 +60,6 @@ function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
   return Math.round(R * c);
 }
 
-// Helper para descomponer fechas en estándar analítico para Power BI
 function formatearFechaParaPowerBI(fechaStr) {
   if (!fechaStr) return { fecha_corta: null, id_fecha: null, hora: null, iso: null };
   const limpia = fechaStr.replace('T', ' ');
@@ -147,7 +146,7 @@ export default function App() {
     itemAEliminar
   );
 
-  // Detección inteligente de proximidad (<180m de una obra) - Solo para asesores
+  // Dynamic Island: Detección inteligente de proximidad (<180m)
   const obraProxima = useMemo(() => {
     if (esDirector || !tabletPos?.lat || !tabletPos?.lng) return null;
     for (const o of obras) {
@@ -160,7 +159,7 @@ export default function App() {
     return null;
   }, [tabletPos, obras, esDirector]);
 
-  // Sincronización nube
+  // Sincronización en la nube
   const recargarDatosNube = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     try {
@@ -261,7 +260,6 @@ export default function App() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [usuarioActivo]);
 
-  // Handlers Obras
   const handleGuardarObra = async (nuevaObra) => {
     await guardarObraDB(nuevaObra);
     if (obraAEditar) {
@@ -273,7 +271,6 @@ export default function App() {
     }
   };
 
-  // Handlers Clientes
   const handleGuardarCliente = async (nuevoCliente) => {
     await guardarClienteDB(nuevoCliente);
     if (clienteAEditar) {
@@ -342,7 +339,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR POWER BI CON LLAVES DE FECHA ANALÍTICAS (DAX READY)
+  // EXPORTADOR POWER BI
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -428,7 +425,7 @@ export default function App() {
       };
     });
 
-    // 3. Fact_Visitas (Con llaves DAX para tablas Calendario)
+    // 3. Fact_Visitas
     const hojaVisitas = visitas
       .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
       .map(v => {
@@ -453,7 +450,7 @@ export default function App() {
         };
       });
 
-    // 4. Fact_Movimientos (Con llaves DAX para tablas Calendario)
+    // 4. Fact_Movimientos
     const obrasIdsValidas = obrasAExportar.map(o => o.id);
     const hojaMovimientos = movimientos
       .filter(m => obrasIdsValidas.includes(m.obraId))
@@ -506,7 +503,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 pb-24 font-sans">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 font-sans">
       
       <Header 
         gpsEstado={gpsEstado} 
@@ -520,30 +517,36 @@ export default function App() {
         setFiltroSucursal={setFiltroSucursal}
       />
 
-      {/* BANNER INTELIGENTE: PROXIMIDAD A OBRA (<180M) */}
+      {/* DYNAMIC ISLAND: ALERTA INTELIGENTE CUANDO LLEGAS A UNA OBRA */}
       {obraProxima && !algunModalAbierto && (
-        <div className="mx-3 mt-2.5 p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
-          <div className="min-w-0">
-            <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> Estás en la obra ({obraProxima.distancia}m)
-            </span>
-            <h4 className="text-xs sm:text-sm font-black truncate mt-1">{obraProxima.obra.nombre}</h4>
-            <p className="text-[10px] text-emerald-100 truncate">{obraProxima.obra.sucursal} • {obraProxima.obra.estatusFase}</p>
+        <div className="mx-3.5 mt-3 p-3.5 bg-slate-950/95 text-white rounded-3xl shadow-[0_12px_36px_rgba(0,0,0,0.2)] border border-slate-800 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+          <div className="min-w-0 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <MapPin className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                📍 Estás en la obra ({obraProxima.distancia}m)
+              </span>
+              <h4 className="text-xs sm:text-sm font-black truncate text-white mt-0.5">{obraProxima.obra.nombre}</h4>
+              <p className="text-[10px] text-slate-400 truncate">{obraProxima.obra.sucursal} • {obraProxima.obra.estatusFase}</p>
+            </div>
           </div>
+
           <button
             type="button"
             onClick={() => {
               setObraParaVisita(obraProxima.obra);
               setModalVisitaAbierto(true);
             }}
-            className="px-3.5 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-black text-xs rounded-xl shadow-md shrink-0 active:scale-95 transition-all flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            <span>Check-in Rápido</span>
+            className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-105 active:scale-95 text-slate-950 font-black text-xs rounded-2xl shadow-md shadow-emerald-500/30 shrink-0 transition-all flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 fill-slate-950" />
+            <span>Check-in</span>
           </button>
         </div>
       )}
 
-      <main className="w-full px-3 py-3 space-y-3">
+      <main className="w-full px-3.5 py-3 space-y-3">
         {tab === 'pipeline' && (
           <PipelineTab 
             obras={obras}
@@ -601,7 +604,7 @@ export default function App() {
         )}
       </main>
 
-      {/* BOTÓN FLOTANTE INFERIOR: OCULTO PARA EL DIRECTOR */}
+      {/* Botón Flotante Elevado (Oculto para el Director) */}
       {!algunModalAbierto && !esDirector && (
         <button
           type="button"
@@ -614,15 +617,16 @@ export default function App() {
               setModalObraAbierto(true);
             }
           }}
-          className="fixed bottom-20 right-4 z-30 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white p-4 rounded-2xl shadow-xl shadow-[#0091FB]/30 flex items-center gap-2 font-black text-sm transition-all">
-          {tab === 'clientes' ? <UserPlus className="w-5 h-5 stroke-[2.5]" /> : <Building2 className="w-5 h-5 stroke-[2.5]" />}
+          className="fixed bottom-22 right-4 z-30 bg-gradient-to-r from-[#001757] via-[#00227a] to-[#0091FB] hover:brightness-105 active:scale-95 text-white px-4 py-3.5 rounded-3xl shadow-[0_12px_32px_-4px_rgba(0,23,87,0.35)] flex items-center gap-2 font-black text-xs transition-all border border-white/20">
+          {tab === 'clientes' ? <UserPlus className="w-4 h-4 stroke-[2.5]" /> : <Building2 className="w-4 h-4 stroke-[2.5]" />}
           <span>{tab === 'clientes' ? '+ Nuevo Cliente' : '+ Nueva Obra'}</span>
         </button>
       )}
 
+      {/* Barra de Navegación Flotante Estilo iOS */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* PANEL DE METAS Y KPIS */}
+      {/* Panel de Metas y Rendimiento */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
@@ -641,7 +645,7 @@ export default function App() {
         onSeleccionarSucursal={(suc) => setFiltroSucursal(suc)}
       />
 
-      {/* EXPEDIENTE 360° */}
+      {/* Expediente 360° */}
       <ModalExpedienteObra
         isOpen={Boolean(obraSeleccionada)}
         onClose={() => setObraSeleccionada(null)}
@@ -670,7 +674,7 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
-      {/* CREAR / EDITAR OBRA */}
+      {/* Alta / Edición de Obra */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -683,7 +687,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* ALTA / EDICIÓN DE CLIENTE */}
+      {/* Alta / Edición de Cliente */}
       <ModalCliente
         isOpen={modalCliente}
         onClose={() => { setModalCliente(false); setClienteAEditar(null); }}
@@ -695,7 +699,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* CHECK-IN VISITA */}
+      {/* Check-in de Visita */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
         onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); }}
@@ -705,7 +709,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* COTIZACIÓN O VENTA */}
+      {/* Cotización o Venta */}
       <ModalComercial
         isOpen={modalComercialAbierto}
         onClose={() => { setModalComercialAbierto(false); setConfigComercial(null); }}
@@ -714,7 +718,7 @@ export default function App() {
         onSave={handleGuardarMovimiento}
       />
 
-      {/* SELECTOR GPS */}
+      {/* Selector GPS */}
       {mapaPickerConfig && (
         <ModalMapaPicker 
           isOpen={true}
@@ -728,20 +732,20 @@ export default function App() {
         />
       )}
 
-      {/* NAVEGACIÓN GPS */}
+      {/* Navegación GPS */}
       <ModalNavegacion 
         isOpen={Boolean(destinoRuta)}
         onClose={() => setDestinoRuta(null)}
         destino={destinoRuta}
       />
 
-      {/* VISOR FOTOS/PDF */}
+      {/* Visor Multimedia */}
       <ModalVisor 
         visorModal={visorModal}
         onClose={() => setVisorModal(null)}
       />
 
-      {/* CONFIRMACIÓN DE BORRADO SEGURO */}
+      {/* Confirmación de Borrado */}
       {itemAEliminar && (
         <div className="fixed inset-0 z-[110] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200">

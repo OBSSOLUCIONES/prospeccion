@@ -2,8 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, SlidersHorizontal, User, ChevronRight,
-  Pencil, Trash2, Building2, Flame, Snowflake, Clock, X,
-  Camera, Navigation, MapPin, ArrowDownUp
+  Pencil, Trash2, Building2, Snowflake, Clock, X,
+  Camera, MapPin, ArrowDownUp
 } from 'lucide-react';
 import { SUCURSALES, FASES_OBRA, FASE_COLORS } from '../data/constants';
 
@@ -70,8 +70,6 @@ export default function PipelineTab({
   const [filtroEspecial, setFiltroEspecial] = useState('TODAS');
   const [filtroEstadoObra, setFiltroEstadoObra] = useState('ACTIVA');
   const [modalFiltrosAbierto, setModalFiltrosAbierto] = useState(false);
-  
-  // ORDENAMIENTO DE ÉLITE: 'CERCANIA' | 'DIAS_SIN_VISITA' | 'RECIENTES'
   const [criterioOrden, setCriterioOrden] = useState('CERCANIA');
 
   const obrasPorSucursal = obras.filter(o => 
@@ -133,7 +131,6 @@ export default function PipelineTab({
         );
       });
 
-    // Aplicar ordenamiento
     return list.sort((a, b) => {
       if (criterioOrden === 'CERCANIA') {
         if (a.distanciaMetros === null) return 1;
@@ -141,9 +138,8 @@ export default function PipelineTab({
         return a.distanciaMetros - b.distanciaMetros;
       }
       if (criterioOrden === 'DIAS_SIN_VISITA') {
-        return b.diasSinVisita - a.diasSinVisita; // Más frías primero
+        return b.diasSinVisita - a.diasSinVisita;
       }
-      // 'RECIENTES'
       return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     });
   }, [obrasProcesadas, filtroEstadoObra, filtroFase, filtroEspecial, search, criterioOrden]);
@@ -154,28 +150,28 @@ export default function PipelineTab({
                              (filtroEstadoObra !== 'ACTIVA' ? 1 : 0);
 
   return (
-    <div className="space-y-2.5 pb-24">
+    <div className="space-y-3 pb-28">
       
-      {/* BUSCADOR COMPACTO + BOTÓN FILTROS */}
+      {/* Barra de Búsqueda y Filtros con Elevación */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
           <input 
             type="text"
             placeholder="Buscar por obra, folio o cliente..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10 pl-9 pr-3 rounded-2xl border border-slate-200 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0091FB] shadow-2xs"
+            className="w-full h-10.5 pl-10 pr-3 rounded-2xl border border-slate-200/80 bg-white text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0091FB] focus:ring-2 focus:ring-[#0091FB]/10 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition-all"
           />
         </div>
 
         <button
           type="button"
           onClick={() => setModalFiltrosAbierto(true)}
-          className={`h-10 px-3.5 rounded-2xl text-xs font-black flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 shadow-2xs ${
+          className={`h-10.5 px-3.5 rounded-2xl text-xs font-black flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.03)] ${
             filtrosActivosCount > 0 
               ? 'bg-[#001757] text-white border-[#001757]' 
-              : 'bg-white text-[#001757] border-slate-200 hover:bg-slate-50'
+              : 'bg-white text-[#001757] border-slate-200/80 hover:bg-slate-50'
           }`}>
           <SlidersHorizontal className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Filtros</span>
@@ -187,64 +183,64 @@ export default function PipelineTab({
         </button>
       </div>
 
-      {/* CHIPS RÁPIDOS DE ORDENAMIENTO (MÁS CERCANAS / MÁS FRÍAS / RECIENTES) */}
+      {/* Chips Rápidos de Ordenamiento Táctil */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0 mr-0.5">
-          <ArrowDownUp className="w-3 h-3" /> Orden:
+          <ArrowDownUp className="w-3 h-3" />
         </span>
 
         <button
           type="button"
           onClick={() => setCriterioOrden('CERCANIA')}
-          className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] whitespace-nowrap transition-all flex items-center gap-1 ${
+          className={`px-3 py-1.5 rounded-xl font-black text-[11px] whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
             criterioOrden === 'CERCANIA'
-              ? 'bg-[#001757] text-white shadow-xs'
-              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-[#001757] text-white shadow-sm shadow-[#001757]/20 scale-102'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}>
           <MapPin className="w-3 h-3 text-[#0091FB]" />
-          <span>📍 Más Cercanas a mí</span>
+          <span>Más Cercanas</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCriterioOrden('DIAS_SIN_VISITA')}
-          className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] whitespace-nowrap transition-all flex items-center gap-1 ${
+          className={`px-3 py-1.5 rounded-xl font-black text-[11px] whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
             criterioOrden === 'DIAS_SIN_VISITA'
-              ? 'bg-rose-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-rose-600 text-white shadow-sm shadow-rose-600/20 scale-102'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}>
-          <Snowflake className="w-3 h-3 text-rose-400" />
-          <span>❄️ Más Frías Primero</span>
+          <Snowflake className="w-3 h-3 text-rose-300" />
+          <span>Más Frías</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCriterioOrden('RECIENTES')}
-          className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] whitespace-nowrap transition-all flex items-center gap-1 ${
+          className={`px-3 py-1.5 rounded-xl font-black text-[11px] whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
             criterioOrden === 'RECIENTES'
-              ? 'bg-[#001757] text-white shadow-xs'
-              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-[#001757] text-white shadow-sm shadow-[#001757]/20 scale-102'
+              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
           }`}>
           <Clock className="w-3 h-3 text-slate-400" />
           <span>Recientes</span>
         </button>
       </div>
 
-      <div className="flex items-center justify-between px-1 text-[11px] font-semibold text-slate-400">
+      <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400">
         <span>{obrasFiltradas.length} obras {filtroEstadoObra === 'ACTIVA' ? 'en proceso' : filtroEstadoObra === 'PAUSADA' ? 'pausadas' : filtroEstadoObra === 'TERMINADA' ? 'concluidas' : 'totales'}</span>
         {filtroSucursal !== 'TODAS' && (
-          <span className="font-extrabold text-[#001757] bg-blue-50 px-2 py-0.5 rounded-md">
+          <span className="font-extrabold text-[#001757] bg-blue-50/80 border border-blue-200/60 px-2 py-0.5 rounded-md">
             {filtroSucursal}
           </span>
         )}
       </div>
 
-      {/* LISTADO DE TARJETAS DE OBRAS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {/* Grid de Tarjetas Estilo Silicon Valley */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         {obrasFiltradas.length === 0 ? (
-          <div className="col-span-full p-8 text-center bg-white rounded-3xl border border-slate-200/90 space-y-1.5">
-            <Building2 className="w-8 h-8 text-slate-300 mx-auto" />
-            <h4 className="text-xs font-black text-slate-800">No encontramos ninguna obra</h4>
+          <div className="col-span-full p-10 text-center bg-white rounded-3xl border border-slate-200/70 shadow-sm space-y-2">
+            <Building2 className="w-9 h-9 text-slate-300 mx-auto" />
+            <h4 className="text-xs font-black text-slate-800">No hay obras registradas</h4>
             <p className="text-[11px] text-slate-400">Prueba cambiando tus filtros de estado o fase.</p>
           </div>
         ) : (
@@ -256,23 +252,22 @@ export default function PipelineTab({
               <div
                 key={obra.id}
                 onClick={() => onSeleccionarObra(obra)}
-                className="w-full bg-white hover:border-[#0091FB] active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/90 px-3.5 py-3 shadow-2xs hover:shadow-sm transition-all space-y-2">
+                className="w-full bg-white hover:border-[#0091FB]/60 active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/70 px-4 py-3.5 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.04)] hover:shadow-md transition-all duration-200 space-y-2.5">
                 
-                {/* LÍNEA 1: ID + NOMBRE + DISTANCIA GPS + FASE */}
+                {/* Línea 1: Folio + Nombre + Distancia + Fase */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex items-center gap-1.5">
-                    <span className="font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] shrink-0">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="font-mono font-black text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md text-[10px] shrink-0 border border-slate-200/50">
                       {obra.id}
                     </span>
-                    <h3 className="text-sm font-black text-[#001757] tracking-tight truncate leading-tight">
+                    <h3 className="text-sm font-black text-[#001757] tracking-tight truncate leading-snug">
                       {obra.nombre}
                     </h3>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* Badge de Distancia GPS Real */}
                     {distanciaTexto && (
-                      <span className="text-[9px] font-black bg-blue-50 text-[#0091FB] border border-blue-200 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                      <span className="text-[9px] font-black bg-blue-50/90 text-[#0091FB] border border-blue-200/60 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs">
                         <MapPin className="w-2.5 h-2.5 text-rose-500" />
                         {distanciaTexto}
                       </span>
@@ -287,37 +282,37 @@ export default function PipelineTab({
                     ) : obra.estadoObra === 'TERMINADA' ? (
                       <span className="text-[9px] font-black bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">Concluida</span>
                     ) : obra.diasSinVisita === 0 ? (
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" title="Visitada Hoy" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]" title="Visitada Hoy" />
                     ) : esFria ? (
-                      <span className="w-2 h-2 rounded-full bg-rose-500" title={`Hace ${obra.diasSinVisita} días`} />
+                      <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]" title={`Hace ${obra.diasSinVisita} días`} />
                     ) : null}
                   </div>
                 </div>
 
-                {/* LÍNEA 2: CLIENTE Y ÚLTIMA VISITA */}
+                {/* Línea 2: Cliente y Tiempo sin Visita */}
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                  <p className="truncate font-semibold flex items-center gap-1 text-[11px]">
+                  <p className="truncate font-bold flex items-center gap-1 text-[11px]">
                     <User className="w-3 h-3 text-[#0091FB] shrink-0" />
                     <span className="truncate">{obra.cliente ? obra.cliente.nombreCliente : 'Sin cliente asignado'}</span>
                   </p>
 
-                  <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                  <span className="text-[10px] text-slate-400 font-semibold shrink-0">
                     {obra.diasSinVisita === 0 ? 'Hoy' : `Hace ${obra.diasSinVisita}d`} • {obra.sucursal}
                   </span>
                 </div>
 
-                {/* LÍNEA 3: MONTOS + BOTÓN CHECK-IN RÁPIDO + EDITAR */}
+                {/* Línea 3: Balance Comercial + Botón Check-in Rápido */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-3 text-xs">
                     <div>
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block leading-none">Cotizado</span>
+                      <span className="text-[9px] uppercase font-black text-slate-400 block leading-none">Cotizado</span>
                       <strong className="text-xs font-black text-[#001757] leading-tight block mt-0.5">
                         {formatearMoneda(obra.cotizado)}
                       </strong>
                     </div>
 
-                    <div className="border-l border-slate-200 pl-3">
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block leading-none">Vendido</span>
+                    <div className="border-l border-slate-200/80 pl-3">
+                      <span className="text-[9px] uppercase font-black text-slate-400 block leading-none">Vendido</span>
                       <strong className="text-xs font-black text-emerald-600 leading-tight block mt-0.5">
                         {formatearMoneda(obra.vendido)}
                       </strong>
@@ -325,7 +320,6 @@ export default function PipelineTab({
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* BOTÓN CHECK-IN DIRECTO (PASAR DE 3 CLICS A 1 SOLO TOQUE) */}
                     {onNuevaVisita && obra.estadoObra !== 'TERMINADA' && (
                       <button
                         type="button"
@@ -333,9 +327,9 @@ export default function PipelineTab({
                           e.stopPropagation();
                           onNuevaVisita(obra);
                         }}
-                        className="h-7 px-2 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white font-black text-[11px] rounded-lg flex items-center gap-1 shadow-2xs transition-all"
-                        title="Hacer Check-in de Campo Inmediato">
-                        <Camera className="w-3 h-3" />
+                        className="h-7.5 px-2.5 bg-gradient-to-r from-[#0091FB] to-[#007be0] hover:brightness-105 active:scale-95 text-white font-black text-[11px] rounded-xl flex items-center gap-1 shadow-xs shadow-[#0091FB]/25 transition-all"
+                        title="Check-in Inmediato">
+                        <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
                         <span>Check-in</span>
                       </button>
                     )}
@@ -346,7 +340,7 @@ export default function PipelineTab({
                         e.stopPropagation();
                         onEditarObra(obra);
                       }}
-                      className="w-7 h-7 rounded-lg text-slate-400 hover:text-[#0091FB] hover:bg-blue-50 flex items-center justify-center transition-colors"
+                      className="w-7.5 h-7.5 rounded-xl text-slate-400 hover:text-[#0091FB] hover:bg-blue-50 flex items-center justify-center transition-colors"
                       title="Editar">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -357,7 +351,7 @@ export default function PipelineTab({
                         e.stopPropagation();
                         onEliminarObra(obra);
                       }}
-                      className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors"
+                      className="w-7.5 h-7.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors"
                       title="Borrar">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -374,10 +368,10 @@ export default function PipelineTab({
         )}
       </div>
 
-      {/* MODAL DE FILTROS */}
+      {/* Modal de Filtros */}
       {modalFiltrosAbierto && (
         <div className="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-          <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+          <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto border border-slate-100">
             
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
