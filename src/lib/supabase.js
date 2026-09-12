@@ -20,18 +20,16 @@ export const isSupabaseConfigured = Boolean(
   supabaseUrl.includes('.supabase.co')
 );
 
-// PATRÓN SINGLETON: Reutiliza la misma conexión y evita advertencias de GoTrueClient
 const obtenerClienteSupabaseUnico = () => {
   if (!isSupabaseConfigured) return null;
 
-  // Si ya existe una conexión en la ventana del navegador, la reutiliza
   if (globalThis.__supabaseClientInstance) {
     return globalThis.__supabaseClientInstance;
   }
 
   const client = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      persistSession: false, // La app utiliza autenticación propia por PIN
+      persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false
     }
@@ -43,9 +41,9 @@ const obtenerClienteSupabaseUnico = () => {
 
 export const supabase = obtenerClienteSupabaseUnico();
 
-// =======================================================
-// COMPRESIÓN DE IMÁGENES (AHORRO DEL 95% DE ESPACIO)
-// =======================================================
+// ==========================================
+// COMPRESIÓN DE IMÁGENES
+// ==========================================
 export async function comprimirImagen(file, maxDimension = 1280, calidad = 0.75) {
   if (!file.type.startsWith('image/')) return file;
 
@@ -109,12 +107,63 @@ export async function subirArchivoSupabase(file, folder = 'fotos') {
     });
 
   if (uploadError) {
-    console.error('Error subiendo a Supabase:', uploadError);
+    console.error('Error subiendo a Supabase Storage:', uploadError);
     return URL.createObjectURL(file);
   }
 
   const { data } = supabase.storage.from('evidencias-obras').getPublicUrl(nombreLimpio);
   return data.publicUrl;
+}
+
+// ==========================================
+// CRUD CLIENTES
+// ==========================================
+export async function obtenerClientesDB() {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('clientes').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('Error obteniendo clientes:', error); return null; }
+  return data.map(c => ({
+    id: c.id,
+    sucursal: c.sucursal,
+    idRedAzul: c.id_red_azul || '',
+    nombreCliente: c.nombre_cliente,
+    tipoCliente: c.tipo_cliente,
+    tipoMercado: c.tipo_mercado || '',
+    responsable: c.responsable,
+    contacto: c.contacto || '',
+    correo: c.correo || '',
+    direccion: c.direccion || '',
+    lat: c.lat,
+    lng: c.lng,
+    ubicacion: c.ubicacion || ''
+  }));
+}
+
+export async function guardarClienteDB(cliente) {
+  if (!supabase) return;
+  const fila = {
+    id: cliente.id,
+    sucursal: cliente.sucursal,
+    id_red_azul: cliente.idRedAzul || null,
+    nombre_cliente: cliente.nombreCliente,
+    tipo_cliente: cliente.tipoCliente,
+    tipo_mercado: cliente.tipoMercado || null,
+    responsable: cliente.responsable,
+    contacto: cliente.contacto || null,
+    correo: cliente.correo || null,
+    direccion: cliente.direccion || null,
+    lat: cliente.lat || null,
+    lng: cliente.lng || null,
+    ubicacion: cliente.ubicacion || null
+  };
+  const { error } = await supabase.from('clientes').upsert(fila);
+  if (error) console.error('Error guardando cliente:', error);
+}
+
+export async function eliminarClienteDB(id) {
+  if (!supabase) return;
+  const { error } = await supabase.from('clientes').delete().eq('id', id);
+  if (error) console.error('Error eliminando cliente en Supabase:', error);
 }
 
 // ==========================================
@@ -127,7 +176,7 @@ export async function obtenerObrasDB() {
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (error) { console.warn('Aviso cargando obras de BD:', error); return null; }
+  if (error) { console.error('Error obteniendo obras:', error); return null; }
   return data.map(o => ({
     id: o.id,
     nombre: o.nombre,
@@ -168,6 +217,51 @@ export async function eliminarObraDB(id) {
 }
 
 // ==========================================
+// CRUD VISITAS
+// ==========================================
+export async function obtenerVisitasDB() {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('visitas').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('Error obteniendo visitas:', error); return null; }
+  return data.map(v => ({
+    id: v.id,
+    obraId: v.obra_id,
+    sucursal: v.sucursal,
+    fecha: v.fecha,
+    asesorNombre: v.asesor_nombre,
+    estatus: v.estatus,
+    actividad: v.actividad,
+    observaciones: v.observaciones || '',
+    fotos: v.fotos || [],
+    latGpsReal: v.lat_gps_real,
+    lngGpsReal: v.lng_gps_real,
+    distanciaAuditoriaMetros: v.distancia_auditoria_metros,
+    auditoriaEstado: v.auditoria_estado
+  }));
+}
+
+export async function guardarVisitaDB(visita) {
+  if (!supabase) return;
+  const fila = {
+    id: visita.id,
+    obra_id: visita.obraId,
+    sucursal: visita.sucursal,
+    fecha: visita.fecha,
+    asesor_nombre: visita.asesorNombre,
+    estatus: visita.estatus,
+    actividad: visita.actividad,
+    observaciones: visita.observaciones || null,
+    fotos: visita.fotos || [],
+    lat_gps_real: visita.latGpsReal || null,
+    lng_gps_real: visita.lngGpsReal || null,
+    distancia_auditoria_metros: visita.distanciaAuditoriaMetros || 0,
+    auditoria_estado: visita.auditoriaEstado || 'remoto'
+  };
+  const { error } = await supabase.from('visitas').upsert(fila);
+  if (error) console.error('Error guardando visita en Supabase:', error);
+}
+
+// ==========================================
 // CRUD MOVIMIENTOS COMERCIALES
 // ==========================================
 export async function obtenerMovimientosDB() {
@@ -177,7 +271,7 @@ export async function obtenerMovimientosDB() {
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (error) { console.warn('Aviso cargando movimientos de BD:', error); return null; }
+  if (error) { console.error('Error obteniendo movimientos:', error); return null; }
   return data.map(m => ({
     id: m.id,
     obraId: m.obra_id,
@@ -216,68 +310,20 @@ export async function guardarMovimientoDB(mov) {
   if (error) console.error('Error guardando movimiento en Supabase:', error);
 }
 
-export async function eliminarMovimientoDB(id) {
-  if (!supabase) return;
-  const { error } = await supabase.from('movimientos_comerciales').delete().eq('id', id);
-  if (error) console.error('Error eliminando movimiento de Supabase:', error);
-}
-
 // ==========================================
-// CRUD CLIENTES, USUARIOS Y POSICIÓN EN VIVO
+// SUSCRIPCIÓN EN VIVO (SIN F5)
 // ==========================================
-export async function obtenerClientesDB() {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('clientes').select('*').order('id', { ascending: true });
-  if (error) throw error;
-  return data.map(c => ({
-    id: c.id,
-    sucursal: c.sucursal,
-    idRedAzul: c.id_red_azul || '',
-    nombreCliente: c.nombre_cliente,
-    tipoCliente: c.tipo_cliente,
-    tipoMercado: c.tipo_mercado || '',
-    responsable: c.responsable,
-    contacto: c.contacto || '',
-    correo: c.correo || '',
-    direccion: c.direccion || '',
-    lat: c.lat,
-    lng: c.lng,
-    ubicacion: c.ubicacion || ''
-  }));
-}
+export function suscribirCambiosGlobales(callback) {
+  if (!supabase) return () => {};
+  const canal = supabase
+    .channel('cambios-en-vivo-app')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'obras' }, () => callback('obras'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => callback('clientes'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'visitas' }, () => callback('visitas'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos_comerciales' }, () => callback('movimientos'))
+    .subscribe();
 
-export async function guardarClienteDB(cliente) {
-  if (!supabase) return;
-  const fila = {
-    id: cliente.id,
-    sucursal: cliente.sucursal,
-    id_red_azul: cliente.idRedAzul || null,
-    nombre_cliente: cliente.nombreCliente,
-    tipo_cliente: cliente.tipoCliente,
-    tipo_mercado: cliente.tipoMercado || null,
-    responsable: cliente.responsable,
-    contacto: cliente.contacto || null,
-    correo: cliente.correo || null,
-    direccion: cliente.direccion || null,
-    lat: cliente.lat || null,
-    lng: cliente.lng || null,
-    ubicacion: cliente.ubicacion || null
-  };
-  const { error } = await supabase.from('clientes').upsert(fila);
-  if (error) throw error;
-}
-
-export async function eliminarClienteDB(id) {
-  if (!supabase) return;
-  const { error } = await supabase.from('clientes').delete().eq('id', id);
-  if (error) throw error;
-}
-
-export async function obtenerUsuariosDB() {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('usuarios').select('*').order('nombre', { ascending: true });
-  if (error) return null;
-  return data;
+  return () => supabase.removeChannel(canal);
 }
 
 export async function transmitirPosicionDB({ usuarioId, nombre, sucursal, lat, lng, accuracy }) {

@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { Plus, UserPlus, AlertTriangle, Building2 } from 'lucide-react';
 
@@ -36,12 +36,14 @@ import {
   obtenerObrasDB,
   guardarObraDB,
   eliminarObraDB,
+  obtenerVisitasDB,
+  guardarVisitaDB,
   obtenerMovimientosDB,
   guardarMovimientoDB,
-  obtenerUsuariosDB,
   transmitirPosicionDB,
   obtenerPosicionesEnVivoDB,
-  suscribirPosicionesEnVivo
+  suscribirPosicionesEnVivo,
+  suscribirCambiosGlobales
 } from './lib/supabase';
 
 export default function App() {
@@ -52,10 +54,7 @@ export default function App() {
     return local ? JSON.parse(local) : null;
   });
 
-  const [usuarios, setUsuarios] = useState(() => {
-    const local = localStorage.getItem('app_obras_usuarios');
-    return local ? JSON.parse(local) : USUARIOS_INICIALES;
-  });
+  const [usuarios] = useState(USUARIOS_INICIALES);
 
   const [clientes, setClientes] = useState(() => {
     const local = localStorage.getItem('app_obras_clientes');
@@ -78,7 +77,7 @@ export default function App() {
   });
 
   const [asesoresEnVivo, setAsesoresEnVivo] = useState([]);
-  const [sincronizando, setSincronizando] = useState(isSupabaseConfigured);
+  const [sincronizando, setSincronizando] = useState(false);
   const [search, setSearch] = useState('');
   const [filtroFase, setFiltroFase] = useState('TODAS');
   const [filtroSucursal, setFiltroSucursal] = useState('TODAS');
@@ -122,44 +121,57 @@ export default function App() {
     itemAEliminar
   );
 
-  // Sincronización nube
-  useEffect(() => {
-    async function sincronizarConNube() {
-      if (!isSupabaseConfigured) return;
-      try {
-        setSincronizando(true);
-        const [clientesDB, obrasDB, movimientosDB, usuariosDB] = await Promise.all([
-          obtenerClientesDB(),
-          obtenerObrasDB(),
-          obtenerMovimientosDB(),
-          obtenerUsuariosDB()
-        ]);
+  // FUNCIÓN MAESTRA DE DESCARGA DESDE LA NUBE
+  const recargarDatosNube = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      setSincronizando(true);
+      const [clientesDB, obrasDB, visitasDB, movimientosDB] = await Promise.all([
+        obtenerClientesDB(),
+        obtenerObrasDB(),
+        obtenerVisitasDB(),
+        obtenerMovimientosDB()
+      ]);
 
-        if (clientesDB && clientesDB.length > 0) setClientes(clientesDB);
-        if (obrasDB && obrasDB.length > 0) setObras(obrasDB);
-        if (movimientosDB && movimientosDB.length > 0) setMovimientos(movimientosDB);
-        if (usuariosDB && usuariosDB.length > 0) setUsuarios(usuariosDB);
+      if (Array.isArray(clientesDB)) setClientes(clientesDB);
+      if (Array.isArray(obrasDB)) setObras(obrasDB);
+      if (Array.isArray(visitasDB)) setVisitas(visitasDB);
+      if (Array.isArray(movimientosDB)) setMovimientos(movimientosDB);
 
-        if (esDirector) {
-          const flota = await obtenerPosicionesEnVivoDB();
-          setAsesoresEnVivo(flota);
-        }
-      } catch (err) {
-        console.warn('Operando en modo local:', err);
-      } finally {
-        setSincronizando(false);
+      if (esDirector) {
+        const flota = await obtenerPosicionesEnVivoDB();
+        setAsesoresEnVivo(flota);
       }
-    }
-
-    sincronizarConNube();
-
-    if (esDirector) {
-      const desuscribir = suscribirPosicionesEnVivo((flota) => setAsesoresEnVivo(flota));
-      return () => desuscribir();
+    } catch (err) {
+      console.warn('Error sincronizando con nube:', err);
+    } finally {
+      setSincronizando(false);
     }
   }, [esDirector]);
 
-  // Persistencia local
+  // Sincronización inicial y escucha EN VIVO sin presionar F5
+  useEffect(() => {
+    recargarDatosNube();
+
+    if (isSupabaseConfigured) {
+      const desuscribirCambios = suscribirCambiosGlobales(() => {
+        // En cuanto el celular o la PC tocan algo, la otra pantalla se actualiza en vivo
+        recargarDatosNube();
+      });
+
+      let desuscribirFlota = () => {};
+      if (esDirector) {
+        desuscribirFlota = suscribirPosicionesEnVivo((flota) => setAsesoresEnVivo(flota));
+      }
+
+      return () => {
+        desuscribirCambios();
+        desuscribirFlota();
+      };
+    }
+  }, [recargarDatosNube, esDirector]);
+
+  // Persistencia local como respaldo de seguridad
   useEffect(() => { localStorage.setItem('app_obras_maestras', JSON.stringify(obras)); }, [obras]);
   useEffect(() => { localStorage.setItem('app_obras_bitacora_visitas', JSON.stringify(visitas)); }, [visitas]);
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
@@ -214,8 +226,7 @@ export default function App() {
 
   // Handlers Obras
   const handleGuardarObra = async (nuevaObra) => {
-    try { await guardarObraDB(nuevaObra); } catch {}
-
+    await guardarObraDB(nuevaObra);
     if (obraAEditar) {
       setObras(prev => prev.map(o => o.id === obraAEditar.id ? nuevaObra : o));
       if (obraSeleccionada && obraSeleccionada.id === nuevaObra.id) setObraSeleccionada(nuevaObra);
@@ -227,8 +238,7 @@ export default function App() {
 
   // Handlers Clientes
   const handleGuardarCliente = async (nuevoCliente) => {
-    try { await guardarClienteDB(nuevoCliente); } catch {}
-
+    await guardarClienteDB(nuevoCliente);
     if (clienteAEditar) {
       setClientes(prev => prev.map(c => c.id === clienteAEditar.id ? nuevoCliente : c));
       setClienteAEditar(null);
@@ -237,25 +247,28 @@ export default function App() {
     }
   };
 
+  // Borrado Real en Supabase
   const ejecutarEliminacion = async () => {
     if (!itemAEliminar) return;
 
     if (itemAEliminar.tipo === 'obra') {
       const id = itemAEliminar.data.id;
-      try { await eliminarObraDB(id); } catch {}
+      await eliminarObraDB(id);
       setObras(prev => prev.filter(o => o.id !== id));
       setVisitas(prev => prev.filter(v => v.obraId !== id));
       setMovimientos(prev => prev.filter(m => m.obraId !== id));
       if (obraSeleccionada && obraSeleccionada.id === id) setObraSeleccionada(null);
     } else if (itemAEliminar.tipo === 'cliente') {
-      try { await eliminarClienteDB(itemAEliminar.data.id); } catch {}
-      setClientes(prev => prev.filter(c => c.id !== itemAEliminar.data.id));
+      const id = itemAEliminar.data.id;
+      await eliminarClienteDB(id);
+      setClientes(prev => prev.filter(c => c.id !== id));
     }
 
     setItemAEliminar(null);
   };
 
-  const handleGuardarVisita = (nuevaVisita) => {
+  const handleGuardarVisita = async (nuevaVisita) => {
+    await guardarVisitaDB(nuevaVisita);
     setVisitas(prev => [nuevaVisita, ...prev]);
     setObras(prev => prev.map(o => {
       if (o.id === nuevaVisita.obraId) {
@@ -269,7 +282,7 @@ export default function App() {
   };
 
   const handleGuardarMovimiento = async (nuevoMov) => {
-    try { await guardarMovimientoDB(nuevoMov); } catch {}
+    await guardarMovimientoDB(nuevoMov);
     setMovimientos(prev => {
       const existe = prev.some(m => m.id === nuevoMov.id);
       if (existe) return prev.map(m => m.id === nuevoMov.id ? nuevoMov : m);
@@ -293,7 +306,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR CON ESQUEMA ESTRELLA COMPLETO: CLIENTES + OBRAS + VISITAS + MOVIMIENTOS
+  // EXPORTADOR COMPLETO POWER BI (4 HOJAS)
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -305,7 +318,7 @@ export default function App() {
       ? clientes
       : clientes.filter(c => c.sucursal === filtroSucursal);
 
-    // 1. Tabla Dim_Clientes (Directorio Comercial y Cartera de Clientes)
+    // 1. Dim_Clientes
     const hojaClientes = clientesAExportar.map(c => {
       const obrasCliente = obras.filter(o => o.clienteId === c.id);
       const obrasIds = obrasCliente.map(o => o.id);
@@ -338,7 +351,7 @@ export default function App() {
       };
     });
 
-    // 2. Tabla Dim_Obras (Proyectos Físicos)
+    // 2. Dim_Obras
     const hojaObras = obrasAExportar.map(o => {
       const cli = clientes.find(c => c.id === o.clienteId);
       const visObra = visitas.filter(v => v.obraId === o.id);
@@ -375,7 +388,7 @@ export default function App() {
       };
     });
 
-    // 3. Tabla Fact_Visitas (Bitácora de Supervisión y Auditoría Satelital)
+    // 3. Fact_Visitas
     const hojaVisitas = visitas.map(v => ({
       visita_id: v.id,
       obra_id: v.obraId,
@@ -392,7 +405,7 @@ export default function App() {
       observaciones: v.observaciones || ''
     }));
 
-    // 4. Tabla Fact_Movimientos (Cotizaciones y Cierres)
+    // 4. Fact_Movimientos
     const hojaMovimientos = movimientos.map(m => ({
       movimiento_id: m.id,
       obra_id: m.obraId,
@@ -418,7 +431,6 @@ export default function App() {
     XLSX.writeFile(libro, `PowerBI_Control_Obras_${filtroSucursal}_${fechaHoy}.xlsx`);
   };
 
-  // Cálculos dinámicos para el Panel de Metas
   const hoyStr = new Date().toISOString().slice(0, 10);
   const visitasHoy = visitas.filter(v => v.fecha && v.fecha.startsWith(hoyStr)).length;
   const metaDiaria = 5;
