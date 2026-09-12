@@ -1,6 +1,6 @@
 // src/components/PantallaPin.jsx
 import React, { useState } from 'react';
-import { Building2, Delete, ShieldCheck, Lock } from 'lucide-react';
+import { Compass, Delete, ShieldCheck, Lock } from 'lucide-react';
 
 export default function PantallaPin({ usuarios, onLogin }) {
   const [pin, setPin] = useState('');
@@ -39,32 +39,35 @@ export default function PantallaPin({ usuarios, onLogin }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-950 flex flex-col items-center justify-between p-6 select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[120] bg-[#000b26] flex flex-col items-center justify-between p-6 sm:p-8 select-none animate-in fade-in duration-300">
       
-      {/* Cabecera y Marca */}
-      <div className="flex flex-col items-center pt-6 sm:pt-10 text-center space-y-2">
-        <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-          <Building2 className="w-7 h-7" />
+      {/* Cabecera y Branding Homologado PROSPECCIÓN OBS */}
+      <div className="flex flex-col items-center pt-4 sm:pt-8 text-center space-y-2.5">
+        <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-[#001757] via-[#00227a] to-[#0091FB] flex items-center justify-center text-white shadow-xl shadow-[#0091FB]/20 border border-white/20">
+          <Compass className="w-8 h-8 text-[#0091FB] stroke-[2.4]" />
         </div>
         <div>
-          <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">Control de Obras</h1>
-          <p className="text-xs text-slate-400">Acceso Territorial Red Azul</p>
+          <span className="text-[11px] font-black uppercase tracking-[0.25em] text-[#0091FB]">
+            PROSPECCIÓN
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">OBS</h1>
+          <p className="text-xs font-semibold text-slate-400 mt-0.5">Acceso a Terminal de Campo</p>
         </div>
       </div>
 
       {/* Indicador de 4 dígitos */}
-      <div className={`flex flex-col items-center space-y-3 ${shake ? 'animate-bounce' : ''}`}>
-        <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-          <Lock className="w-3.5 h-3.5 text-blue-400" /> Ingresa tu PIN de acceso
+      <div className={`flex flex-col items-center space-y-3.5 ${shake ? 'animate-bounce' : ''}`}>
+        <p className="text-xs sm:text-sm font-black text-slate-300 flex items-center gap-1.5">
+          <Lock className="w-4 h-4 text-[#0091FB]" /> Ingresa tu PIN de 4 dígitos
         </p>
 
-        <div className="flex gap-4 my-2">
+        <div className="flex gap-4 sm:gap-5 my-1">
           {[0, 1, 2, 3].map(i => (
             <div
               key={i}
-              className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
+              className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 transition-all duration-150 ${
                 pin.length > i 
-                  ? 'bg-blue-500 border-blue-500 scale-115 shadow-md shadow-blue-500/50' 
+                  ? 'bg-[#0091FB] border-[#0091FB] scale-110 shadow-lg shadow-[#0091FB]/50' 
                   : 'border-slate-700 bg-transparent'
               }`}
             />
@@ -72,21 +75,21 @@ export default function PantallaPin({ usuarios, onLogin }) {
         </div>
 
         {error ? (
-          <p className="text-xs text-rose-400 font-bold animate-pulse">{error}</p>
+          <p className="text-xs sm:text-sm text-rose-400 font-extrabold animate-pulse">{error}</p>
         ) : (
-          <p className="text-[11px] text-slate-500">4 dígitos numéricos</p>
+          <p className="text-[11px] text-slate-500 font-medium">Uso exclusivo para asesores y directores</p>
         )}
       </div>
 
-      {/* Teclado Numérico Táctil */}
-      <div className="w-full max-w-xs space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+      {/* Teclado Numérico Ergonómico de Alto Contraste para Tablets y Fundas de Uso Rudo */}
+      <div className="w-full max-w-xs sm:max-w-sm space-y-4">
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
             <button
               key={n}
               type="button"
               onClick={() => agregarDigito(n)}
-              className="h-16 rounded-2xl bg-slate-900 border border-slate-800 text-white text-2xl font-bold hover:bg-slate-800 active:scale-90 active:bg-blue-600 transition-all flex items-center justify-center shadow-xs">
+              className="h-16 sm:h-18 rounded-2xl bg-slate-900/90 border border-slate-700 text-white text-2xl sm:text-3xl font-black hover:bg-slate-800 active:scale-95 active:bg-[#0091FB] active:border-[#0091FB] transition-all flex items-center justify-center shadow-md active:shadow-none select-none touch-manipulation">
               {n}
             </button>
           ))}
@@ -96,21 +99,22 @@ export default function PantallaPin({ usuarios, onLogin }) {
           <button
             type="button"
             onClick={() => agregarDigito(0)}
-            className="h-16 rounded-2xl bg-slate-900 border border-slate-800 text-white text-2xl font-bold hover:bg-slate-800 active:scale-90 active:bg-blue-600 transition-all flex items-center justify-center shadow-xs">
+            className="h-16 sm:h-18 rounded-2xl bg-slate-900/90 border border-slate-700 text-white text-2xl sm:text-3xl font-black hover:bg-slate-800 active:scale-95 active:bg-[#0091FB] active:border-[#0091FB] transition-all flex items-center justify-center shadow-md active:shadow-none select-none touch-manipulation">
             0
           </button>
           <button
             type="button"
             onClick={borrarDigito}
-            className="h-16 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 active:scale-90 transition-all flex items-center justify-center shadow-xs">
-            <Delete className="w-6 h-6" />
+            className="h-16 sm:h-18 rounded-2xl bg-slate-900/90 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 active:bg-rose-600/30 transition-all flex items-center justify-center shadow-md active:shadow-none select-none touch-manipulation"
+            title="Borrar dígito">
+            <Delete className="w-7 h-7" />
           </button>
         </div>
       </div>
 
-      {/* Pie de página discreto */}
-      <div className="text-[10px] text-slate-600 pb-2 flex items-center gap-1">
-        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Sistema Seguro Red Azul
+      {/* Certificación de Seguridad */}
+      <div className="text-[11px] font-bold text-slate-500 pb-2 flex items-center gap-1.5">
+        <ShieldCheck className="w-4 h-4 text-emerald-400" /> Sistema Seguro PROSPECCIÓN OBS
       </div>
 
     </div>

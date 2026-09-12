@@ -1,6 +1,6 @@
 // src/components/Header.jsx
 import React from 'react';
-import { Building2, FileSpreadsheet, Lock, RefreshCw, Target } from 'lucide-react';
+import { Compass, FileSpreadsheet, Lock, RefreshCw, Target } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
 export default function Header({ 
@@ -18,16 +18,16 @@ export default function Header({
   return (
     <header className="fixed top-0 left-0 right-0 z-30 h-[58px] sm:h-[64px] bg-white/90 backdrop-blur-xl border-b border-slate-200/80 px-3 sm:px-5 flex items-center justify-between gap-2 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)]">
       
-      {/* Logotipo e Identidad (Protegido para no encogerse en móvil) */}
+      {/* Logotipo e Identidad PROSPECCIÓN OBS */}
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
         <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-xl bg-gradient-to-br from-[#001757] via-[#00227a] to-[#0091FB] flex items-center justify-center text-white shadow-md shadow-[#001757]/20 border border-white/20">
-          <Building2 className="w-4 h-4 sm:w-4.5 sm:h-4.5 stroke-[2.2]" />
+          <Compass className="w-4 h-4 sm:w-4.5 sm:h-4.5 stroke-[2.2] text-[#0091FB]" />
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <h1 className="text-xs sm:text-sm font-black text-[#001757] tracking-tight whitespace-nowrap">
-              Control Obras
+              PROSPECCIÓN OBS
             </h1>
 
             {/* Micro-punto GPS */}
@@ -54,12 +54,12 @@ export default function Header({
           </div>
 
           <p className="text-[8px] sm:text-[9px] font-extrabold text-slate-400 tracking-wider uppercase whitespace-nowrap">
-            {esDirector ? 'Dirección' : usuarioActivo?.sucursal || 'Red Azul'}
+            {esDirector ? 'Dirección General' : usuarioActivo?.sucursal || 'PROSPECCIÓN OBS'}
           </p>
         </div>
       </div>
 
-      {/* Controles del Header Optimizados para Celular */}
+      {/* Controles del Header Optimizados para Celular y Tablet */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
         
         {/* Selector de Sucursales para el Director */}

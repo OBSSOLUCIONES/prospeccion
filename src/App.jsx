@@ -27,6 +27,7 @@ import ModalMapaPicker from './components/ModalMapaPicker';
 import ModalVisor from './components/ModalVisor';
 import ModalNavegacion from './components/ModalNavegacion';
 import PantallaPin from './components/PantallaPin';
+import SplashScreen from './components/SplashScreen';
 
 import { 
   isSupabaseConfigured,
@@ -73,6 +74,7 @@ function formatearFechaParaPowerBI(fechaStr) {
 
 export default function App() {
   const [tab, setTab] = useState('pipeline');
+  const [mostrarSplash, setMostrarSplash] = useState(true);
   
   const [usuarioActivo, setUsuarioActivo] = useState(() => {
     const local = localStorage.getItem('app_obras_usuario_activo');
@@ -498,6 +500,12 @@ export default function App() {
     return diff > 12;
   }).length;
 
+  // 1. Splash Screen Cinemático Inicial
+  if (mostrarSplash) {
+    return <SplashScreen onFinish={() => setMostrarSplash(false)} />;
+  }
+
+  // 2. Pantalla de Acceso por PIN
   if (!usuarioActivo) {
     return <PantallaPin usuarios={usuarios} onLogin={(u) => setUsuarioActivo(u)} />;
   }

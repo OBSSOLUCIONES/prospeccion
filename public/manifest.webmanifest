@@ -1,10 +1,10 @@
 {
-  "name": "Control de Obras - Red Azul",
-  "short_name": "Control Obras",
-  "description": "Gestión técnica de obras, clientes y auditoría satelital en campo",
+  "name": "PROSPECCIÓN OBS",
+  "short_name": "OBS Obras",
+  "description": "Control territorial de obras, clientes y auditoría satelital en campo",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#F8FAFC",
+  "background_color": "#000b26",
   "theme_color": "#001757",
   "orientation": "any",
   "icons": [
