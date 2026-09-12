@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { AlertTriangle, MapPin, Zap } from 'lucide-react';
@@ -148,7 +149,7 @@ export default function App() {
 
   const [modalVisitaAbierto, setModalVisitaAbierto] = useState(false);
   const [obraParaVisita, setObraParaVisita] = useState(null);
-  const [visitaAEditar, setVisitaAEditar] = useState(null); // NUEVO: Estado para editar visitas
+  const [visitaAEditar, setVisitaAEditar] = useState(null);
 
   const [modalComercialAbierto, setModalComercialAbierto] = useState(false);
   const [configComercial, setConfigComercial] = useState(null);
@@ -370,7 +371,6 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // Guardar o Actualizar Visita
   const handleGuardarVisita = async (nuevaVisita) => {
     const visitaLimpia = sanitizarAMayusculas(nuevaVisita);
     setVisitas(prev => {
@@ -396,7 +396,6 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // Eliminar Visita individual en Supabase y localmente
   const handleEliminarVisita = async (visitaId) => {
     const idLimpio = String(visitaId).trim().toUpperCase();
     setVisitas(prev => prev.filter(v => v.id !== idLimpio));
@@ -404,13 +403,31 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // GUARDAR VENTA O COTIZACIÓN (CON CIERRE AUTOMÁTICO DE COTIZACIÓN PREVIA)
   const handleGuardarMovimiento = async (nuevoMov) => {
     const movLimpio = sanitizarAMayusculas(nuevoMov);
+
     setMovimientos(prev => {
-      const existe = prev.some(m => m.id === movLimpio.id);
-      if (existe) return prev.map(m => m.id === movLimpio.id ? movLimpio : m);
-      return [movLimpio, ...prev];
+      let listaActualizada = prev.map(m => m.id === movLimpio.id ? movLimpio : m);
+      if (!prev.some(m => m.id === movLimpio.id)) {
+        listaActualizada = [movLimpio, ...listaActualizada];
+      }
+
+      // Si es venta enlazada a una cotización, la marcamos como GANADA automáticamente
+      if (movLimpio.tipo === 'VENTA' && movLimpio.cotizacionOrigenId) {
+        listaActualizada = listaActualizada.map(m => {
+          if (m.id === movLimpio.cotizacionOrigenId) {
+            const cotGanada = { ...m, estatus: 'GANADA' };
+            guardarMovimientoDB(cotGanada); // Actualiza también en Supabase
+            return cotGanada;
+          }
+          return m;
+        });
+      }
+
+      return listaActualizada;
     });
+
     await guardarMovimientoDB(movLimpio);
     refrescarConteoOffline();
   };
@@ -716,7 +733,7 @@ export default function App() {
       {/* BARRA INFERIOR */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* PANEL METAS */}
+      {/* MODALES */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
@@ -735,7 +752,6 @@ export default function App() {
         onSeleccionarSucursal={(suc) => setFiltroSucursal(suc)}
       />
 
-      {/* EXPEDIENTE 360° (CON GESTIÓN DE VISITAS) */}
       <ModalExpedienteObra
         isOpen={Boolean(obraSeleccionada)}
         onClose={() => setObraSeleccionada(null)}
@@ -771,7 +787,6 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
-      {/* ALTA / EDICIÓN DE OBRA */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -784,7 +799,6 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* ALTA / EDICIÓN DE CLIENTE */}
       <ModalCliente
         isOpen={modalCliente}
         onClose={() => { setModalCliente(false); setClienteAEditar(null); }}
@@ -796,7 +810,6 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* CHECK-IN Y EDICIÓN DE VISITAS */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
         onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); setVisitaAEditar(null); }}
@@ -807,16 +820,16 @@ export default function App() {
         visitaAEditar={visitaAEditar}
       />
 
-      {/* MODAL COMERCIAL */}
+      {/* MODAL COMERCIAL CONECTADO CON MOVIMIENTOS PREVIOS */}
       <ModalComercial
         isOpen={modalComercialAbierto}
         onClose={() => { setModalComercialAbierto(false); setConfigComercial(null); }}
         obra={configComercial?.obra}
         tipoDefault={configComercial?.tipo || 'COTIZACION'}
+        movimientos={movimientos}
         onSave={handleGuardarMovimiento}
       />
 
-      {/* SELECTOR GPS */}
       {mapaPickerConfig && (
         <ModalMapaPicker 
           isOpen={true}
@@ -830,20 +843,17 @@ export default function App() {
         />
       )}
 
-      {/* NAVEGACIÓN GPS */}
       <ModalNavegacion 
         isOpen={Boolean(destinoRuta)}
         onClose={() => setDestinoRuta(null)}
         destino={destinoRuta}
       />
 
-      {/* VISOR MULTIMEDIA */}
       <ModalVisor 
         visorModal={visorModal}
         onClose={() => setVisorModal(null)}
       />
 
-      {/* CONFIRMACIÓN DE BORRADO DE OBRA / CLIENTE */}
       {itemAEliminar && (
         <div className="fixed inset-0 z-[110] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200">
