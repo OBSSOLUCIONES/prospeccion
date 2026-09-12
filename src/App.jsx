@@ -293,7 +293,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR CON ESQUEMA ESTRELLA 100% COMPATIBLE CON POWER BI Y EXCEL
+  // EXPORTADOR CON ESQUEMA ESTRELLA COMPLETO: CLIENTES + OBRAS + VISITAS + MOVIMIENTOS
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -301,7 +301,44 @@ export default function App() {
       ? obras
       : obras.filter(o => o.sucursal === filtroSucursal);
 
-    // 1. Tabla Dim_Obras
+    const clientesAExportar = filtroSucursal === 'TODAS'
+      ? clientes
+      : clientes.filter(c => c.sucursal === filtroSucursal);
+
+    // 1. Tabla Dim_Clientes (Directorio Comercial y Cartera de Clientes)
+    const hojaClientes = clientesAExportar.map(c => {
+      const obrasCliente = obras.filter(o => o.clienteId === c.id);
+      const obrasIds = obrasCliente.map(o => o.id);
+      const movsCliente = movimientos.filter(m => obrasIds.includes(m.obraId));
+      
+      const totalCotizado = movsCliente
+        .filter(m => m.tipo === 'COTIZACION')
+        .reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
+
+      const totalVendido = movsCliente
+        .filter(m => m.tipo === 'VENTA')
+        .reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
+
+      return {
+        cliente_id: c.id,
+        id_red_azul: c.idRedAzul || 'SIN_ID',
+        nombre_cliente: c.nombreCliente,
+        sucursal: c.sucursal,
+        clasificacion_cliente: c.tipoCliente || 'PROSPECTO',
+        tipo_mercado: c.tipoMercado || 'GENERAL',
+        responsable_contacto: c.responsable || 'SIN ENCARGADO',
+        telefono_contacto: c.contacto || 'SIN TELEFONO',
+        correo_contacto: c.correo || 'SIN CORREO',
+        total_obras_asociadas: obrasCliente.length,
+        total_cotizado_mxn: totalCotizado,
+        total_vendido_mxn: totalVendido,
+        latitud: c.lat ? Number(parseFloat(c.lat).toFixed(6)) : null,
+        longitud: c.lng ? Number(parseFloat(c.lng).toFixed(6)) : null,
+        direccion_fiscal: c.direccion || ''
+      };
+    });
+
+    // 2. Tabla Dim_Obras (Proyectos Físicos)
     const hojaObras = obrasAExportar.map(o => {
       const cli = clientes.find(c => c.id === o.clienteId);
       const visObra = visitas.filter(v => v.obraId === o.id);
@@ -338,7 +375,7 @@ export default function App() {
       };
     });
 
-    // 2. Tabla Fact_Visitas
+    // 3. Tabla Fact_Visitas (Bitácora de Supervisión y Auditoría Satelital)
     const hojaVisitas = visitas.map(v => ({
       visita_id: v.id,
       obra_id: v.obraId,
@@ -355,7 +392,7 @@ export default function App() {
       observaciones: v.observaciones || ''
     }));
 
-    // 3. Tabla Fact_Movimientos
+    // 4. Tabla Fact_Movimientos (Cotizaciones y Cierres)
     const hojaMovimientos = movimientos.map(m => ({
       movimiento_id: m.id,
       obra_id: m.obraId,
@@ -372,6 +409,7 @@ export default function App() {
     }));
 
     const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaClientes), 'Dim_Clientes');
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaObras), 'Dim_Obras');
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaVisitas), 'Fact_Visitas');
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaMovimientos), 'Fact_Movimientos');
@@ -482,7 +520,7 @@ export default function App() {
 
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* PANEL DE METAS Y KPIS (AHORA TOTALMENTE CONECTADO) */}
+      {/* PANEL DE METAS Y KPIS */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
