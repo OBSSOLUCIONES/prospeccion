@@ -386,6 +386,21 @@ export default function MapaTab({
 
       {/* Contenedor del Mapa Satelital */}
       <div className="h-[68vh] w-full rounded-3xl overflow-hidden border border-slate-200/80 shadow-md relative">
+        
+        {/* BOTÓN FLOTANTE MI UBICACIÓN: AHORA EN LA ESQUINA SUPERIOR DERECHA (ESTILO GOOGLE / APPLE MAPS) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCentrarMiGps();
+          }}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute top-3.5 right-3.5 z-20 bg-white/95 backdrop-blur-md text-[#001757] hover:text-[#0091FB] font-black text-xs px-3 py-2 rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.15)] border border-slate-200/90 flex items-center gap-1.5 active:scale-95 transition-all select-none touch-manipulation cursor-pointer"
+          title="Centrar mapa en mi posición GPS">
+          <Crosshair className="w-4 h-4 text-[#0091FB] shrink-0" />
+          <span>Mi Ubicación</span>
+        </button>
+
         <MapContainer 
           center={centroInicial} 
           zoom={12} 
@@ -518,19 +533,6 @@ export default function MapaTab({
 
         </MapContainer>
 
-        {/* BOTÓN FLOTANTE ELEVADO (SEPARADO DEL BOTTOM NAV Y SIN TEMBLORES) */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleCentrarMiGps();
-          }}
-          onTouchStart={(e) => e.stopPropagation()}
-          className="absolute bottom-20 right-4 z-[400] bg-white/95 backdrop-blur-md text-[#001757] hover:text-[#0091FB] font-black text-xs px-3.5 py-2.5 rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.18)] border border-slate-200/90 flex items-center gap-1.5 active:scale-95 transition-all select-none touch-manipulation cursor-pointer"
-          title="Centrar mapa en mi posición GPS">
-          <Crosshair className="w-4 h-4 text-[#0091FB] shrink-0" />
-          <span>Mi Ubicación</span>
-        </button>
       </div>
 
     </div>
