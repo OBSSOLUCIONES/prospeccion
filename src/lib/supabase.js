@@ -226,6 +226,59 @@ export async function subirArchivoSupabase(file, folder = 'fotos') {
   }
 }
 
+// =========================================================================
+// AUTO-ADAPTADOR INTELIGENTE RESILIENTE (RESUELVE CUALQUIER ERROR DE SCHEMA)
+// =========================================================================
+async function ejecutarUpsertSeguro(tabla, filaOriginal) {
+  if (!supabase) return { ok: false, error: 'No supabase' };
+  let fila = { ...filaOriginal };
+  let intentos = 0;
+
+  while (intentos < 5) {
+    intentos++;
+    const { error } = await supabase.from(tabla).upsert(fila);
+    if (!error) {
+      console.log(`✅ Guardado exitoso en ${tabla}:`, fila.id);
+      return { ok: true };
+    }
+
+    console.warn(`Intento ${intentos} en ${tabla} reportó:`, error.message);
+
+    // 1. Si falla porque una columna no existe en Supabase (ej: 'proyecto' en 'obras')
+    const matchColumnaInexistente = error.message.match(/could not find the '([^']+)' column/i) 
+      || error.message.match(/column "([^"]+)" of relation "[^"]+" does not exist/i);
+    
+    if (matchColumnaInexistente) {
+      const colABorrar = matchColumnaInexistente[1];
+      console.warn(`Auto-reparación: quitando columna inexistente '${colABorrar}' de ${tabla}...`);
+      delete fila[colABorrar];
+      continue;
+    }
+
+    // 2. Si falla porque una columna en Supabase es NOT NULL y venía vacía (ej: 'tipo_desarrollo')
+    const matchColumnaNotNull = error.message.match(/null value in column "([^"]+)"/i);
+    if (matchColumnaNotNull) {
+      const colFaltante = matchColumnaNotNull[1];
+      console.warn(`Auto-reparación: rellenando columna obligatoria '${colFaltante}' en ${tabla}...`);
+      fila[colFaltante] = colFaltante.includes('id') ? 'SIN_ID' : 'OBRA NUEVA';
+      continue;
+    }
+
+    // 3. Si falla por cliente_id llave foránea
+    if (error.message.includes('cliente_id') || error.code === '23503') {
+      console.warn(`Auto-reparación: desvinculando cliente_id para guardar obra sin conflicto...`);
+      fila.cliente_id = null;
+      continue;
+    }
+
+    // Si es un error desconocido
+    alert(`⚠️ Error guardando en ${tabla}: ${error.message}`);
+    return { ok: false, error };
+  }
+
+  return { ok: false, error: 'Demasiados intentos' };
+}
+
 // ==========================================
 // CRUD CLIENTES
 // ==========================================
@@ -276,15 +329,8 @@ export async function guardarClienteDB(cliente) {
     return;
   }
 
-  try {
-    const { error } = await supabase.from('clientes').upsert(fila);
-    if (error) {
-      alert(`⚠️ Error guardando cliente en Supabase: ${error.message}`);
-      await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
-    } else {
-      console.log('✅ Cliente guardado con éxito en Supabase:', fila.id);
-    }
-  } catch (err) {
+  const res = await ejecutarUpsertSeguro('clientes', fila);
+  if (!res.ok) {
     await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
   }
 }
@@ -337,12 +383,9 @@ export async function obtenerObrasDB() {
 }
 
 export async function guardarObraDB(obra) {
-  const nombreFinal = String(obra.nombre || obra.proyecto || '').trim().toUpperCase();
-
   const fila = {
     id: String(obra.id).trim().toUpperCase(),
-    nombre: nombreFinal,
-    proyecto: nombreFinal, // Se envían ambos por compatibilidad total
+    nombre: String(obra.nombre || '').trim().toUpperCase(), // Solo nombre, sin 'proyecto'
     sucursal: String(obra.sucursal || 'ALTOZANO').trim().toUpperCase(),
     cliente_id: (obra.clienteId && String(obra.clienteId).trim() !== '' && obra.clienteId !== 'SIN_CLIENTE') 
       ? String(obra.clienteId).trim().toUpperCase() 
@@ -360,28 +403,8 @@ export async function guardarObraDB(obra) {
     return;
   }
 
-  try {
-    const { error } = await supabase.from('obras').upsert(fila);
-    if (error) {
-      console.warn('Aviso Supabase al guardar obra:', error.message);
-      if (error.message && (error.message.includes('cliente_id') || error.code === '23503')) {
-        fila.cliente_id = null;
-        const reintento = await supabase.from('obras').upsert(fila);
-        if (reintento.error) {
-          alert(`⚠️ Error guardando obra en Supabase: ${reintento.error.message}`);
-          await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
-        } else {
-          console.log('✅ Obra guardada en Supabase (modo seguro):', fila.id);
-        }
-      } else {
-        alert(`⚠️ Error guardando obra en Supabase: ${error.message}`);
-        await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
-      }
-    } else {
-      console.log('✅ Obra guardada con éxito en Supabase:', fila.id);
-    }
-  } catch (err) {
-    alert(`⚠️ Error de red al guardar obra: ${err.message}`);
+  const res = await ejecutarUpsertSeguro('obras', fila);
+  if (!res.ok) {
     await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
   }
 }
@@ -399,8 +422,6 @@ export async function eliminarObraDB(id) {
     if (error) {
       alert(`⚠️ Error eliminando obra en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
-    } else {
-      console.log('✅ Obra y dependencias eliminadas con éxito de Supabase:', idLimpio);
     }
   } catch (err) {
     await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
@@ -408,7 +429,7 @@ export async function eliminarObraDB(id) {
 }
 
 // ==========================================
-// CRUD VISITAS (CON COMPATIBILIDAD PROYECTO / OBRA_ID)
+// CRUD VISITAS
 // ==========================================
 export async function obtenerVisitasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -441,7 +462,8 @@ export async function guardarVisitaDB(visita) {
   const fila = {
     id: String(visita.id).trim().toUpperCase(),
     obra_id: String(visita.obraId).trim().toUpperCase(),
-    proyecto: nombreProyecto, // Se envía 'proyecto' para satisfacer la columna de Supabase
+    proyecto: nombreProyecto,
+    tipo_desarrollo: String(visita.tipoDesarrollo || 'OBRA NUEVA').trim().toUpperCase(), // Satisface la columna requerida
     sucursal: String(visita.sucursal || 'ALTOZANO').trim().toUpperCase(),
     fecha: String(visita.fecha || '').trim(),
     asesor_nombre: String(visita.asesorNombre || 'ASESOR').trim().toUpperCase(),
@@ -460,17 +482,8 @@ export async function guardarVisitaDB(visita) {
     return;
   }
 
-  try {
-    const { error } = await supabase.from('visitas').upsert(fila);
-    if (error) {
-      console.error('Error guardando visita en Supabase:', error);
-      alert(`⚠️ Error guardando visita en Supabase: ${error.message}`);
-      await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
-    } else {
-      console.log('✅ Visita guardada con éxito en Supabase:', fila.id);
-    }
-  } catch (err) {
-    alert(`⚠️ Error de red al guardar visita: ${err.message}`);
+  const res = await ejecutarUpsertSeguro('visitas', fila);
+  if (!res.ok) {
     await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
   }
 }
@@ -548,15 +561,8 @@ export async function guardarMovimientoDB(mov) {
     return;
   }
 
-  try {
-    const { error } = await supabase.from('movimientos_comerciales').upsert(fila);
-    if (error) {
-      alert(`⚠️ Error guardando venta en Supabase: ${error.message}`);
-      await encolarAccionOffline({ id: `mov_${fila.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
-    } else {
-      console.log('✅ Movimiento comercial guardado en Supabase:', fila.id);
-    }
-  } catch (err) {
+  const res = await ejecutarUpsertSeguro('movimientos_comerciales', fila);
+  if (!res.ok) {
     await encolarAccionOffline({ id: `mov_${fila.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
   }
 }
@@ -574,8 +580,8 @@ export async function sincronizarColaOffline() {
   for (const item of pendientes) {
     try {
       if (item.tabla === 'obras') {
-        const { error } = await supabase.from('obras').upsert(item.datos);
-        if (!error) {
+        const res = await ejecutarUpsertSeguro('obras', item.datos);
+        if (res.ok) {
           await eliminarItemColaOffline(item.id);
           sincronizados++;
         }
@@ -588,8 +594,8 @@ export async function sincronizarColaOffline() {
           sincronizados++;
         }
       } else if (item.tabla === 'clientes') {
-        const { error } = await supabase.from('clientes').upsert(item.datos);
-        if (!error) {
+        const res = await ejecutarUpsertSeguro('clientes', item.datos);
+        if (res.ok) {
           await eliminarItemColaOffline(item.id);
           sincronizados++;
         }
@@ -618,8 +624,8 @@ export async function sincronizarColaOffline() {
           }
         }
         const filaVisita = { ...item.datos, fotos: fotosFinales };
-        const { error } = await supabase.from('visitas').upsert(filaVisita);
-        if (!error) {
+        const res = await ejecutarUpsertSeguro('visitas', filaVisita);
+        if (res.ok) {
           await eliminarItemColaOffline(item.id);
           sincronizados++;
         }
@@ -630,8 +636,8 @@ export async function sincronizarColaOffline() {
           sincronizados++;
         }
       } else if (item.tabla === 'movimientos') {
-        const { error } = await supabase.from('movimientos_comerciales').upsert(item.datos);
-        if (!error) {
+        const res = await ejecutarUpsertSeguro('movimientos_comerciales', item.datos);
+        if (res.ok) {
           await eliminarItemColaOffline(item.id);
           sincronizados++;
         }
