@@ -42,6 +42,96 @@ const obtenerClienteSupabaseUnico = () => {
 export const supabase = obtenerClienteSupabaseUnico();
 
 // ==========================================
+// MOTOR INDEXEDDB PARA MODO OFFLINE EN CAMPO
+// ==========================================
+const DB_NAME = 'prospeccion_obs_offline_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'cola_sincronizacion';
+
+function abrirDB() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) {
+      resolve(null);
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function encolarAccionOffline(accion) {
+  try {
+    const db = await abrirDB();
+    if (!db) {
+      const colaLocal = JSON.parse(localStorage.getItem('obs_cola_offline') || '[]');
+      colaLocal.push(accion);
+      localStorage.setItem('obs_cola_offline', JSON.stringify(colaLocal));
+      window.dispatchEvent(new Event('obs_cola_actualizada'));
+      return;
+    }
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put(accion);
+    tx.oncomplete = () => {
+      window.dispatchEvent(new Event('obs_cola_actualizada'));
+    };
+  } catch (err) {
+    console.warn('Error encolando acción offline:', err);
+  }
+}
+
+export async function obtenerItemsColaOffline() {
+  try {
+    const db = await abrirDB();
+    if (!db) {
+      return JSON.parse(localStorage.getItem('obs_cola_offline') || '[]');
+    }
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => resolve([]);
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function eliminarItemColaOffline(id) {
+  try {
+    const db = await abrirDB();
+    if (!db) {
+      const colaLocal = JSON.parse(localStorage.getItem('obs_cola_offline') || '[]');
+      const filtrada = colaLocal.filter(item => item.id !== id);
+      localStorage.setItem('obs_cola_offline', JSON.stringify(filtrada));
+      window.dispatchEvent(new Event('obs_cola_actualizada'));
+      return;
+    }
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(id);
+    tx.oncomplete = () => {
+      window.dispatchEvent(new Event('obs_cola_actualizada'));
+    };
+  } catch (err) {
+    console.warn('Error eliminando item de cola offline:', err);
+  }
+}
+
+export async function contarItemsColaOffline() {
+  const items = await obtenerItemsColaOffline();
+  return items.length;
+}
+
+// ==========================================
 // COMPRESIÓN DE IMÁGENES
 // ==========================================
 export async function comprimirImagen(file, maxDimension = 1280, calidad = 0.75) {
@@ -91,56 +181,82 @@ export async function comprimirImagen(file, maxDimension = 1280, calidad = 0.75)
   });
 }
 
-// Subida a Storage
-export async function subirArchivoSupabase(file, folder = 'fotos') {
-  if (!supabase) return URL.createObjectURL(file);
+function convertirArchivoABase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => resolve(URL.createObjectURL(file));
+    reader.readAsDataURL(file);
+  });
+}
 
+async function base64AArchivo(base64Data, nombreArchivo) {
+  const res = await fetch(base64Data);
+  const blob = await res.blob();
+  return new File([blob], nombreArchivo, { type: 'image/jpeg' });
+}
+
+// Subida a Storage con soporte Offline
+export async function subirArchivoSupabase(file, folder = 'fotos') {
   const archivoAEnviar = await comprimirImagen(file);
+
+  // Si estamos sin conexión o no hay supabase, generar Base64 para visualización offline
+  if (!navigator.onLine || !supabase) {
+    return await convertirArchivoABase64(archivoAEnviar);
+  }
+
   const extension = archivoAEnviar.name.split('.').pop();
   const nombreLimpio = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${extension}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from('evidencias-obras')
-    .upload(nombreLimpio, archivoAEnviar, {
-      cacheControl: '31536000',
-      upsert: false
-    });
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from('evidencias-obras')
+      .upload(nombreLimpio, archivoAEnviar, {
+        cacheControl: '31536000',
+        upsert: false
+      });
 
-  if (uploadError) {
-    console.error('Error subiendo a Supabase Storage:', uploadError);
-    return URL.createObjectURL(file);
+    if (uploadError) {
+      console.warn('Fallo al subir a Storage, guardando en Base64 local:', uploadError);
+      return await convertirArchivoABase64(archivoAEnviar);
+    }
+
+    const { data } = supabase.storage.from('evidencias-obras').getPublicUrl(nombreLimpio);
+    return data.publicUrl;
+  } catch {
+    return await convertirArchivoABase64(archivoAEnviar);
   }
-
-  const { data } = supabase.storage.from('evidencias-obras').getPublicUrl(nombreLimpio);
-  return data.publicUrl;
 }
 
 // ==========================================
-// CRUD CLIENTES
+// CRUD CLIENTES (CON SOPORTE OFFLINE)
 // ==========================================
 export async function obtenerClientesDB() {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('clientes').select('*').order('created_at', { ascending: false });
-  if (error) { console.error('Error obteniendo clientes:', error); return null; }
-  return data.map(c => ({
-    id: c.id,
-    sucursal: c.sucursal,
-    idRedAzul: c.id_red_azul || '',
-    nombreCliente: c.nombre_cliente,
-    tipoCliente: c.tipo_cliente,
-    tipoMercado: c.tipo_mercado || '',
-    responsable: c.responsable,
-    contacto: c.contacto || '',
-    correo: c.correo || '',
-    direccion: c.direccion || '',
-    lat: c.lat,
-    lng: c.lng,
-    ubicacion: c.ubicacion || ''
-  }));
+  if (!supabase || !navigator.onLine) return null;
+  try {
+    const { data, error } = await supabase.from('clientes').select('*').order('created_at', { ascending: false });
+    if (error) return null;
+    return data.map(c => ({
+      id: c.id,
+      sucursal: c.sucursal,
+      idRedAzul: c.id_red_azul || '',
+      nombreCliente: c.nombre_cliente,
+      tipoCliente: c.tipo_cliente,
+      tipoMercado: c.tipo_mercado || '',
+      responsable: c.responsable,
+      contacto: c.contacto || '',
+      correo: c.correo || '',
+      direccion: c.direccion || '',
+      lat: c.lat,
+      lng: c.lng,
+      ubicacion: c.ubicacion || ''
+    }));
+  } catch {
+    return null;
+  }
 }
 
 export async function guardarClienteDB(cliente) {
-  if (!supabase) return;
   const fila = {
     id: cliente.id,
     sucursal: cliente.sucursal,
@@ -156,44 +272,68 @@ export async function guardarClienteDB(cliente) {
     lng: cliente.lng || null,
     ubicacion: cliente.ubicacion || null
   };
-  const { error } = await supabase.from('clientes').upsert(fila);
-  if (error) console.error('Error guardando cliente:', error);
+
+  if (!navigator.onLine || !supabase) {
+    await encolarAccionOffline({ id: `cli_${cliente.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
+    return;
+  }
+
+  try {
+    const { error } = await supabase.from('clientes').upsert(fila);
+    if (error) {
+      await encolarAccionOffline({ id: `cli_${cliente.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
+    }
+  } catch {
+    await encolarAccionOffline({ id: `cli_${cliente.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
+  }
 }
 
 export async function eliminarClienteDB(id) {
-  if (!supabase) return;
-  const { error } = await supabase.from('clientes').delete().eq('id', id);
-  if (error) console.error('Error eliminando cliente en Supabase:', error);
+  if (!supabase || !navigator.onLine) {
+    await encolarAccionOffline({ id: `del_cli_${id}_${Date.now()}`, tabla: 'clientes_delete', datos: { id } });
+    return;
+  }
+  try {
+    const { error } = await supabase.from('clientes').delete().eq('id', id);
+    if (error) {
+      await encolarAccionOffline({ id: `del_cli_${id}_${Date.now()}`, tabla: 'clientes_delete', datos: { id } });
+    }
+  } catch {
+    await encolarAccionOffline({ id: `del_cli_${id}_${Date.now()}`, tabla: 'clientes_delete', datos: { id } });
+  }
 }
 
 // ==========================================
-// CRUD OBRAS
+// CRUD OBRAS (CON SOPORTE OFFLINE)
 // ==========================================
 export async function obtenerObrasDB() {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('obras')
-    .select('*')
-    .order('created_at', { ascending: false });
+  if (!supabase || !navigator.onLine) return null;
+  try {
+    const { data, error } = await supabase
+      .from('obras')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) { console.error('Error obteniendo obras:', error); return null; }
-  return data.map(o => ({
-    id: o.id,
-    nombre: o.nombre,
-    sucursal: o.sucursal,
-    clienteId: o.cliente_id || null,
-    tipoDesarrollo: o.tipo_desarrollo || 'OBRA NUEVA',
-    estatusFase: o.estatus_fase || 'CIMENTACIÓN',
-    estadoObra: o.estado_obra || 'ACTIVA',
-    direccion: o.direccion || '',
-    lat: o.lat ? parseFloat(o.lat) : null,
-    lng: o.lng ? parseFloat(o.lng) : null,
-    createdAt: o.created_at
-  }));
+    if (error) return null;
+    return data.map(o => ({
+      id: o.id,
+      nombre: o.nombre,
+      sucursal: o.sucursal,
+      clienteId: o.cliente_id || null,
+      tipoDesarrollo: o.tipo_desarrollo || 'OBRA NUEVA',
+      estatusFase: o.estatus_fase || 'CIMENTACIÓN',
+      estadoObra: o.estado_obra || 'ACTIVA',
+      direccion: o.direccion || '',
+      lat: o.lat ? parseFloat(o.lat) : null,
+      lng: o.lng ? parseFloat(o.lng) : null,
+      createdAt: o.created_at
+    }));
+  } catch {
+    return null;
+  }
 }
 
 export async function guardarObraDB(obra) {
-  if (!supabase) return;
   const fila = {
     id: obra.id,
     nombre: obra.nombre,
@@ -206,42 +346,66 @@ export async function guardarObraDB(obra) {
     lat: obra.lat || null,
     lng: obra.lng || null
   };
-  const { error } = await supabase.from('obras').upsert(fila);
-  if (error) console.error('Error guardando obra en Supabase:', error);
+
+  if (!navigator.onLine || !supabase) {
+    await encolarAccionOffline({ id: `obr_${obra.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+    return;
+  }
+
+  try {
+    const { error } = await supabase.from('obras').upsert(fila);
+    if (error) {
+      await encolarAccionOffline({ id: `obr_${obra.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+    }
+  } catch {
+    await encolarAccionOffline({ id: `obr_${obra.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+  }
 }
 
 export async function eliminarObraDB(id) {
-  if (!supabase) return;
-  const { error } = await supabase.from('obras').delete().eq('id', id);
-  if (error) console.error('Error eliminando obra de Supabase:', error);
+  if (!supabase || !navigator.onLine) {
+    await encolarAccionOffline({ id: `del_obr_${id}_${Date.now()}`, tabla: 'obras_delete', datos: { id } });
+    return;
+  }
+  try {
+    const { error } = await supabase.from('obras').delete().eq('id', id);
+    if (error) {
+      await encolarAccionOffline({ id: `del_obr_${id}_${Date.now()}`, tabla: 'obras_delete', datos: { id } });
+    }
+  } catch {
+    await encolarAccionOffline({ id: `del_obr_${id}_${Date.now()}`, tabla: 'obras_delete', datos: { id } });
+  }
 }
 
 // ==========================================
-// CRUD VISITAS
+// CRUD VISITAS (CON SOPORTE OFFLINE)
 // ==========================================
 export async function obtenerVisitasDB() {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('visitas').select('*').order('created_at', { ascending: false });
-  if (error) { console.error('Error obteniendo visitas:', error); return null; }
-  return data.map(v => ({
-    id: v.id,
-    obraId: v.obra_id,
-    sucursal: v.sucursal,
-    fecha: v.fecha,
-    asesorNombre: v.asesor_nombre,
-    estatus: v.estatus,
-    actividad: v.actividad,
-    observaciones: v.observaciones || '',
-    fotos: v.fotos || [],
-    latGpsReal: v.lat_gps_real,
-    lngGpsReal: v.lng_gps_real,
-    distanciaAuditoriaMetros: v.distancia_auditoria_metros,
-    auditoriaEstado: v.auditoria_estado
-  }));
+  if (!supabase || !navigator.onLine) return null;
+  try {
+    const { data, error } = await supabase.from('visitas').select('*').order('created_at', { ascending: false });
+    if (error) return null;
+    return data.map(v => ({
+      id: v.id,
+      obraId: v.obra_id,
+      sucursal: v.sucursal,
+      fecha: v.fecha,
+      asesorNombre: v.asesor_nombre,
+      estatus: v.estatus,
+      actividad: v.actividad,
+      observaciones: v.observaciones || '',
+      fotos: v.fotos || [],
+      latGpsReal: v.lat_gps_real,
+      lngGpsReal: v.lng_gps_real,
+      distanciaAuditoriaMetros: v.distancia_auditoria_metros,
+      auditoriaEstado: v.auditoria_estado
+    }));
+  } catch {
+    return null;
+  }
 }
 
 export async function guardarVisitaDB(visita) {
-  if (!supabase) return;
   const fila = {
     id: visita.id,
     obra_id: visita.obraId,
@@ -257,40 +421,55 @@ export async function guardarVisitaDB(visita) {
     distancia_auditoria_metros: visita.distanciaAuditoriaMetros || 0,
     auditoria_estado: visita.auditoriaEstado || 'remoto'
   };
-  const { error } = await supabase.from('visitas').upsert(fila);
-  if (error) console.error('Error guardando visita en Supabase:', error);
+
+  if (!navigator.onLine || !supabase) {
+    await encolarAccionOffline({ id: `vis_${visita.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+    return;
+  }
+
+  try {
+    const { error } = await supabase.from('visitas').upsert(fila);
+    if (error) {
+      await encolarAccionOffline({ id: `vis_${visita.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+    }
+  } catch {
+    await encolarAccionOffline({ id: `vis_${visita.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+  }
 }
 
 // ==========================================
-// CRUD MOVIMIENTOS COMERCIALES
+// CRUD MOVIMIENTOS COMERCIALES (CON SOPORTE OFFLINE)
 // ==========================================
 export async function obtenerMovimientosDB() {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('movimientos_comerciales')
-    .select('*')
-    .order('created_at', { ascending: false });
+  if (!supabase || !navigator.onLine) return null;
+  try {
+    const { data, error } = await supabase
+      .from('movimientos_comerciales')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) { console.error('Error obteniendo movimientos:', error); return null; }
-  return data.map(m => ({
-    id: m.id,
-    obraId: m.obra_id,
-    tipo: m.tipo,
-    comprobante: m.comprobante || 'COTIZACIÓN',
-    folio: m.folio,
-    monto: Number(m.monto) || 0,
-    estatus: m.estatus || 'PENDIENTE',
-    formaPago: m.forma_pago || 'N/A',
-    tipoEntrega: m.tipo_entrega || 'DOMICILIO',
-    fecha: m.fecha,
-    documentoAdjunto: m.documento_adjunto || null,
-    observaciones: m.observaciones || '',
-    cotizacionOrigenId: m.cotizacion_origen_id || null
-  }));
+    if (error) return null;
+    return data.map(m => ({
+      id: m.id,
+      obraId: m.obra_id,
+      tipo: m.tipo,
+      comprobante: m.comprobante || 'COTIZACIÓN',
+      folio: m.folio,
+      monto: Number(m.monto) || 0,
+      estatus: m.estatus || 'PENDIENTE',
+      formaPago: m.forma_pago || 'N/A',
+      tipoEntrega: m.tipo_entrega || 'DOMICILIO',
+      fecha: m.fecha,
+      documentoAdjunto: m.documento_adjunto || null,
+      observaciones: m.observaciones || '',
+      cotizacionOrigenId: m.cotizacion_origen_id || null
+    }));
+  } catch {
+    return null;
+  }
 }
 
 export async function guardarMovimientoDB(mov) {
-  if (!supabase) return;
   const fila = {
     id: mov.id,
     obra_id: mov.obraId,
@@ -306,8 +485,96 @@ export async function guardarMovimientoDB(mov) {
     observaciones: mov.observaciones || null,
     cotizacion_origen_id: mov.cotizacionOrigenId || null
   };
-  const { error } = await supabase.from('movimientos_comerciales').upsert(fila);
-  if (error) console.error('Error guardando movimiento en Supabase:', error);
+
+  if (!navigator.onLine || !supabase) {
+    await encolarAccionOffline({ id: `mov_${mov.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
+    return;
+  }
+
+  try {
+    const { error } = await supabase.from('movimientos_comerciales').upsert(fila);
+    if (error) {
+      await encolarAccionOffline({ id: `mov_${mov.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
+    }
+  } catch {
+    await encolarAccionOffline({ id: `mov_${mov.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
+  }
+}
+
+// ==========================================
+// SINCRONIZADOR DE LA COLA OFFLINE AL VOLVER A TENER SEÑAL
+// ==========================================
+export async function sincronizarColaOffline() {
+  if (!navigator.onLine || !supabase) return 0;
+  
+  const pendientes = await obtenerItemsColaOffline();
+  if (!pendientes.length) return 0;
+
+  let sincronizados = 0;
+
+  for (const item of pendientes) {
+    try {
+      if (item.tabla === 'obras') {
+        const { error } = await supabase.from('obras').upsert(item.datos);
+        if (!error) {
+          await eliminarItemColaOffline(item.id);
+          sincronizados++;
+        }
+      } else if (item.tabla === 'obras_delete') {
+        const { error } = await supabase.from('obras').delete().eq('id', item.datos.id);
+        if (!error) {
+          await eliminarItemColaOffline(item.id);
+          sincronizados++;
+        }
+      } else if (item.tabla === 'clientes') {
+        const { error } = await supabase.from('clientes').upsert(item.datos);
+        if (!error) {
+          await eliminarItemColaOffline(item.id);
+          sincronizados++;
+        }
+      } else if (item.tabla === 'clientes_delete') {
+        const { error } = await supabase.from('clientes').delete().eq('id', item.datos.id);
+        if (!error) {
+          await eliminarItemColaOffline(item.id);
+          sincronizados++;
+        }
+      } else if (item.tabla === 'visitas') {
+        let fotosFinales = [];
+        if (Array.isArray(item.datos.fotos)) {
+          for (let fIdx = 0; fIdx < item.datos.fotos.length; fIdx++) {
+            const foto = item.datos.fotos[fIdx];
+            if (foto.startsWith('data:image/')) {
+              try {
+                const archivo = await base64AArchivo(foto, `foto_${Date.now()}_${fIdx}.jpg`);
+                const urlNube = await subirArchivoSupabase(archivo, 'fotos');
+                fotosFinales.push(urlNube);
+              } catch {
+                fotosFinales.push(foto);
+              }
+            } else {
+              fotosFinales.push(foto);
+            }
+          }
+        }
+        const filaVisita = { ...item.datos, fotos: fotosFinales };
+        const { error } = await supabase.from('visitas').upsert(filaVisita);
+        if (!error) {
+          await eliminarItemColaOffline(item.id);
+          sincronizados++;
+        }
+      } else if (item.tabla === 'movimientos') {
+        const { error } = await supabase.from('movimientos_comerciales').upsert(item.datos);
+        if (!error) {
+          await eliminarItemColaOffline(item.id);
+          sincronizados++;
+        }
+      }
+    } catch (e) {
+      console.warn('Error sincronizando item:', item.id, e);
+    }
+  }
+
+  return sincronizados;
 }
 
 // ==========================================
@@ -327,22 +594,28 @@ export function suscribirCambiosGlobales(callback) {
 }
 
 export async function transmitirPosicionDB({ usuarioId, nombre, sucursal, lat, lng, accuracy }) {
-  if (!supabase || !usuarioId) return;
-  await supabase.from('posiciones_en_vivo').upsert({
-    usuario_id: usuarioId,
-    nombre,
-    sucursal,
-    lat,
-    lng,
-    accuracy,
-    updated_at: new Date().toISOString()
-  });
+  if (!supabase || !usuarioId || !navigator.onLine) return;
+  try {
+    await supabase.from('posiciones_en_vivo').upsert({
+      usuario_id: usuarioId,
+      nombre,
+      sucursal,
+      lat,
+      lng,
+      accuracy,
+      updated_at: new Date().toISOString()
+    });
+  } catch {}
 }
 
 export async function obtenerPosicionesEnVivoDB() {
-  if (!supabase) return [];
-  const { data } = await supabase.from('posiciones_en_vivo').select('*');
-  return data || [];
+  if (!supabase || !navigator.onLine) return [];
+  try {
+    const { data } = await supabase.from('posiciones_en_vivo').select('*');
+    return data || [];
+  } catch {
+    return [];
+  }
 }
 
 export function suscribirPosicionesEnVivo(onUpdate) {

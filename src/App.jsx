@@ -44,7 +44,9 @@ import {
   transmitirPosicionDB,
   obtenerPosicionesEnVivoDB,
   suscribirPosicionesEnVivo,
-  suscribirCambiosGlobales
+  suscribirCambiosGlobales,
+  sincronizarColaOffline,
+  contarItemsColaOffline
 } from './lib/supabase';
 
 function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
@@ -76,6 +78,10 @@ export default function App() {
   const [tab, setTab] = useState('pipeline');
   const [mostrarSplash, setMostrarSplash] = useState(true);
   
+  // Estados de conectividad y cola offline
+  const [estaOnline, setEstaOnline] = useState(navigator.onLine);
+  const [pendientesOffline, setPendientesOffline] = useState(0);
+
   const [usuarioActivo, setUsuarioActivo] = useState(() => {
     const local = localStorage.getItem('app_obras_usuario_activo');
     return local ? JSON.parse(local) : null;
@@ -148,7 +154,7 @@ export default function App() {
     itemAEliminar
   );
 
-  // Dynamic Island: Detección inteligente de proximidad (<180m)
+  // Detección de proximidad inteligente a obras (<180m)
   const obraProxima = useMemo(() => {
     if (esDirector || !tabletPos?.lat || !tabletPos?.lng) return null;
     for (const o of obras) {
@@ -161,9 +167,51 @@ export default function App() {
     return null;
   }, [tabletPos, obras, esDirector]);
 
-  // Sincronización en la nube
+  // Actualizar conteo de cola offline
+  const refrescarConteoOffline = useCallback(async () => {
+    const cant = await contarItemsColaOffline();
+    setPendientesOffline(cant);
+  }, []);
+
+  // Forzar sincronización manual de la cola
+  const ejecutarSincronizacionOffline = useCallback(async () => {
+    if (!navigator.onLine) return;
+    setSincronizando(true);
+    try {
+      await sincronizarColaOffline();
+      await refrescarConteoOffline();
+    } catch (err) {
+      console.warn('Error sincronizando cola offline:', err);
+    } finally {
+      setSincronizando(false);
+    }
+  }, [refrescarConteoOffline]);
+
+  // Monitoreo de conectividad en vivo
+  useEffect(() => {
+    const manejarOnline = () => {
+      setEstaOnline(true);
+      ejecutarSincronizacionOffline();
+    };
+    const manejarOffline = () => setEstaOnline(false);
+    const manejarColaActualizada = () => refrescarConteoOffline();
+
+    window.addEventListener('online', manejarOnline);
+    window.addEventListener('offline', manejarOffline);
+    window.addEventListener('obs_cola_actualizada', manejarColaActualizada);
+
+    refrescarConteoOffline();
+
+    return () => {
+      window.removeEventListener('online', manejarOnline);
+      window.removeEventListener('offline', manejarOffline);
+      window.removeEventListener('obs_cola_actualizada', manejarColaActualizada);
+    };
+  }, [ejecutarSincronizacionOffline, refrescarConteoOffline]);
+
+  // Sincronización en la nube al abrir
   const recargarDatosNube = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !navigator.onLine) return;
     try {
       setSincronizando(true);
       const [clientesDB, obrasDB, visitasDB, movimientosDB] = await Promise.all([
@@ -209,7 +257,7 @@ export default function App() {
     }
   }, [recargarDatosNube, esDirector]);
 
-  // Persistencia local
+  // Persistencia local permanente
   useEffect(() => { localStorage.setItem('app_obras_maestras', JSON.stringify(obras)); }, [obras]);
   useEffect(() => { localStorage.setItem('app_obras_bitacora_visitas', JSON.stringify(visitas)); }, [visitas]);
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
@@ -224,7 +272,7 @@ export default function App() {
     }
   }, [usuarioActivo]);
 
-  // GPS en segundo plano
+  // GPS en segundo plano para auditoría de campo
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGpsEstado('bloqueado');
@@ -263,7 +311,6 @@ export default function App() {
   }, [usuarioActivo]);
 
   const handleGuardarObra = async (nuevaObra) => {
-    await guardarObraDB(nuevaObra);
     if (obraAEditar) {
       setObras(prev => prev.map(o => o.id === obraAEditar.id ? nuevaObra : o));
       if (obraSeleccionada && obraSeleccionada.id === nuevaObra.id) setObraSeleccionada(nuevaObra);
@@ -271,16 +318,19 @@ export default function App() {
     } else {
       setObras(prev => [nuevaObra, ...prev]);
     }
+    await guardarObraDB(nuevaObra);
+    refrescarConteoOffline();
   };
 
   const handleGuardarCliente = async (nuevoCliente) => {
-    await guardarClienteDB(nuevoCliente);
     if (clienteAEditar) {
       setClientes(prev => prev.map(c => c.id === clienteAEditar.id ? nuevoCliente : c));
       setClienteAEditar(null);
     } else {
       setClientes(prev => [nuevoCliente, ...prev]);
     }
+    await guardarClienteDB(nuevoCliente);
+    refrescarConteoOffline();
   };
 
   const ejecutarEliminacion = async () => {
@@ -288,22 +338,23 @@ export default function App() {
 
     if (itemAEliminar.tipo === 'obra') {
       const id = itemAEliminar.data.id;
-      await eliminarObraDB(id);
       setObras(prev => prev.filter(o => o.id !== id));
       setVisitas(prev => prev.filter(v => v.obraId !== id));
       setMovimientos(prev => prev.filter(m => m.obraId !== id));
       if (obraSeleccionada && obraSeleccionada.id === id) setObraSeleccionada(null);
+      await eliminarObraDB(id);
     } else if (itemAEliminar.tipo === 'cliente') {
       const id = itemAEliminar.data.id;
-      await eliminarClienteDB(id);
       setClientes(prev => prev.filter(c => c.id !== id));
+      await eliminarClienteDB(id);
     }
 
     setItemAEliminar(null);
+    refrescarConteoOffline();
   };
 
   const handleGuardarVisita = async (nuevaVisita) => {
-    await guardarVisitaDB(nuevaVisita);
+    // Guardado instantáneo en la vista de la tablet
     setVisitas(prev => [nuevaVisita, ...prev]);
     setObras(prev => prev.map(o => {
       if (o.id === nuevaVisita.obraId) {
@@ -314,15 +365,20 @@ export default function App() {
       }
       return o;
     }));
+
+    // Enviar a Supabase o encolar para sincronización posterior
+    await guardarVisitaDB(nuevaVisita);
+    refrescarConteoOffline();
   };
 
   const handleGuardarMovimiento = async (nuevoMov) => {
-    await guardarMovimientoDB(nuevoMov);
     setMovimientos(prev => {
       const existe = prev.some(m => m.id === nuevoMov.id);
       if (existe) return prev.map(m => m.id === nuevoMov.id ? nuevoMov : m);
       return [nuevoMov, ...prev];
     });
+    await guardarMovimientoDB(nuevoMov);
+    refrescarConteoOffline();
   };
 
   const handleVincularClienteAObra = async (obra) => {
@@ -331,9 +387,10 @@ export default function App() {
       const existe = clientes.find(c => c.id === nuevoClienteId.trim().toUpperCase());
       if (existe) {
         const obraActualizada = { ...obra, clienteId: existe.id };
-        await guardarObraDB(obraActualizada);
         setObras(prev => prev.map(o => o.id === obra.id ? obraActualizada : o));
         setObraSeleccionada(obraActualizada);
+        await guardarObraDB(obraActualizada);
+        refrescarConteoOffline();
         alert(`¡Obra vinculada con éxito a ${existe.nombreCliente}!`);
       } else {
         alert('No encontramos ningún cliente con ese ID en el catálogo.');
@@ -341,7 +398,7 @@ export default function App() {
     }
   };
 
-  // Exportador Power BI
+  // Exportador Power BI para Dirección
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -369,7 +426,7 @@ export default function App() {
 
       return {
         cliente_id: c.id,
-        id_red_azul: c.idRedAzul || 'SIN_ID',
+        id_obs: c.idRedAzul || 'SIN_ID',
         nombre_cliente: c.nombreCliente,
         sucursal: c.sucursal,
         clasificacion_cliente: c.tipoCliente || 'PROSPECTO',
@@ -484,7 +541,7 @@ export default function App() {
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaMovimientos), 'Fact_Movimientos');
 
     const fechaHoy = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(libro, `PowerBI_Control_Obras_${filtroSucursal}_${fechaHoy}.xlsx`);
+    XLSX.writeFile(libro, `PowerBI_Prospeccion_OBS_${filtroSucursal}_${fechaHoy}.xlsx`);
   };
 
   const hoyStr = new Date().toISOString().slice(0, 10);
@@ -513,7 +570,7 @@ export default function App() {
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[62px] sm:pt-[70px] font-sans">
       
-      {/* HEADER 100% FIJO ARRIBA */}
+      {/* HEADER CON TELEMETRÍA OFFLINE / ONLINE */}
       <Header 
         gpsEstado={gpsEstado} 
         tabletPos={tabletPos} 
@@ -524,17 +581,20 @@ export default function App() {
         onAbrirKpis={() => setModalKpisAbierto(true)}
         filtroSucursal={filtroSucursal}
         setFiltroSucursal={setFiltroSucursal}
+        estaOnline={estaOnline}
+        pendientesOffline={pendientesOffline}
+        onForzarSincronizacion={ejecutarSincronizacionOffline}
       />
 
       {/* DYNAMIC ISLAND: ALERTA INTELIGENTE CUANDO LLEGAS A UNA OBRA */}
       {obraProxima && !algunModalAbierto && (
-        <div className="mx-3.5 mb-2.5 p-3.5 bg-slate-950/95 text-white rounded-3xl shadow-[0_12px_36px_rgba(0,0,0,0.2)] border border-slate-800 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+        <div className="mx-3.5 mb-2.5 p-3.5 bg-[#000b26]/95 text-white rounded-3xl shadow-[0_12px_36px_rgba(0,11,38,0.3)] border border-slate-700/60 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
           <div className="min-w-0 flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
               <MapPin className="w-5 h-5 animate-pulse" />
             </div>
             <div className="min-w-0">
-              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
                 📍 Estás en la obra ({obraProxima.distancia}m)
               </span>
               <h4 className="text-xs sm:text-sm font-black truncate text-white mt-0.5">{obraProxima.obra.nombre}</h4>
@@ -548,14 +608,14 @@ export default function App() {
               setObraParaVisita(obraProxima.obra);
               setModalVisitaAbierto(true);
             }}
-            className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-105 active:scale-95 text-slate-950 font-black text-xs rounded-2xl shadow-md shadow-emerald-500/30 shrink-0 transition-all flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 fill-slate-950" />
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-105 active:scale-95 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-md shadow-emerald-500/30 shrink-0 transition-all flex items-center gap-1.5">
+            <Zap className="w-4 h-4 fill-slate-950" />
             <span>Check-in</span>
           </button>
         </div>
       )}
 
-      {/* CONTENIDO SCROLLEABLE ENTRE HEADER FIJO Y BOTTOM NAV FIJO */}
+      {/* CONTENIDO PRINCIPAL SCROLLEABLE */}
       <main className="w-full px-3.5 py-1 space-y-3">
         {tab === 'pipeline' && (
           <PipelineTab 
@@ -627,13 +687,13 @@ export default function App() {
               setModalObraAbierto(true);
             }
           }}
-          className="fixed bottom-22 right-4 z-30 bg-gradient-to-r from-[#001757] via-[#00227a] to-[#0091FB] hover:brightness-105 active:scale-95 text-white px-4 py-3.5 rounded-3xl shadow-[0_12px_32px_-4px_rgba(0,23,87,0.35)] flex items-center gap-2 font-black text-xs transition-all border border-white/20">
-          {tab === 'clientes' ? <UserPlus className="w-4 h-4 stroke-[2.5]" /> : <Building2 className="w-4 h-4 stroke-[2.5]" />}
+          className="fixed bottom-24 right-4 z-30 bg-gradient-to-r from-[#001757] via-[#00227a] to-[#0091FB] hover:brightness-105 active:scale-95 text-white px-5 py-3.5 rounded-3xl shadow-[0_12px_32px_-4px_rgba(0,11,38,0.45)] flex items-center gap-2 font-black text-xs sm:text-sm transition-all border border-white/20">
+          {tab === 'clientes' ? <UserPlus className="w-5 h-5 stroke-[2.4]" /> : <Building2 className="w-5 h-5 stroke-[2.4]" />}
           <span>{tab === 'clientes' ? '+ Nuevo Cliente' : '+ Nueva Obra'}</span>
         </button>
       )}
 
-      {/* BARRA DE NAVEGACIÓN 100% FIJA ABAJO */}
+      {/* BARRA DE NAVEGACIÓN INFERIOR NATIVA ANDROID */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
       {/* Panel de Metas y Rendimiento */}
@@ -784,13 +844,13 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setItemAEliminar(null)}
-                className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 font-black text-xs hover:bg-slate-50 active:scale-95 transition-all">
+                className="w-full min-h-[44px] rounded-xl border border-slate-300 text-slate-700 font-black text-xs hover:bg-slate-50 active:scale-95 transition-all">
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={ejecutarEliminacion}
-                className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md shadow-rose-600/25 active:scale-95 transition-all">
+                className="w-full min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md shadow-rose-600/25 active:scale-95 transition-all">
                 Sí, Eliminar
               </button>
             </div>

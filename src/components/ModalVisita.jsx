@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Camera, Image as ImageIcon, Loader2, 
-  Mic, MicOff, Check
+  Mic, MicOff, Check, WifiOff
 } from 'lucide-react';
 import { FASES_OBRA, CAT_ACTIVIDAD_VISITA } from '../data/constants';
 import { subirArchivoSupabase } from '../lib/supabase';
@@ -128,7 +128,7 @@ export default function ModalVisita({
       const urls = await Promise.all(files.map(f => subirArchivoSupabase(f, 'fotos')));
       setFotos(prev => [...prev, ...urls]);
     } catch {
-      alert('Error subiendo fotos');
+      alert('Error procesando fotografías');
     } finally {
       setSubiendoArchivo(false);
       e.target.value = '';
@@ -182,7 +182,14 @@ export default function ModalVisita({
         {/* Cabecera Fija */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="min-w-0 pr-2">
-            <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">Check-in de Campo</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">Check-in de Campo</h3>
+              {!navigator.onLine && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-md flex items-center gap-1 border border-amber-300">
+                  <WifiOff className="w-3 h-3 text-amber-700" /> Offline
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 truncate mt-0.5">Obra: <strong className="text-slate-800">{obra.nombre}</strong></p>
           </div>
           <button 
@@ -225,7 +232,7 @@ export default function ModalVisita({
             </select>
           </div>
 
-          {/* Fotos de Evidencia con Botones de 48px */}
+          {/* Fotos de Evidencia */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -249,7 +256,7 @@ export default function ModalVisita({
 
             {subiendoArchivo && (
               <div className="flex items-center gap-2 text-xs text-[#0091FB] font-bold bg-blue-50 p-3 rounded-xl animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin" /> Optimizando y subiendo fotografía...
+                <Loader2 className="w-4 h-4 animate-spin" /> Optimizando imagen para campo...
               </div>
             )}
 
@@ -298,7 +305,7 @@ export default function ModalVisita({
 
         </form>
 
-        {/* Botón Fijo Inferior de Alta Visibilidad */}
+        {/* Botón Fijo Inferior */}
         <div className="p-4 bg-white border-t border-slate-100 shrink-0">
           <button
             type="submit"
