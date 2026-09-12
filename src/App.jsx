@@ -339,7 +339,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR POWER BI
+  // Exportador Power BI
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -503,8 +503,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 font-sans">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[62px] sm:pt-[70px] font-sans">
       
+      {/* HEADER 100% FIJO ARRIBA */}
       <Header 
         gpsEstado={gpsEstado} 
         tabletPos={tabletPos} 
@@ -519,7 +520,7 @@ export default function App() {
 
       {/* DYNAMIC ISLAND: ALERTA INTELIGENTE CUANDO LLEGAS A UNA OBRA */}
       {obraProxima && !algunModalAbierto && (
-        <div className="mx-3.5 mt-3 p-3.5 bg-slate-950/95 text-white rounded-3xl shadow-[0_12px_36px_rgba(0,0,0,0.2)] border border-slate-800 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+        <div className="mx-3.5 mb-2.5 p-3.5 bg-slate-950/95 text-white rounded-3xl shadow-[0_12px_36px_rgba(0,0,0,0.2)] border border-slate-800 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
           <div className="min-w-0 flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
               <MapPin className="w-5 h-5 animate-pulse" />
@@ -546,7 +547,8 @@ export default function App() {
         </div>
       )}
 
-      <main className="w-full px-3.5 py-3 space-y-3">
+      {/* CONTENIDO SCROLLEABLE ENTRE HEADER FIJO Y BOTTOM NAV FIJO */}
+      <main className="w-full px-3.5 py-1 space-y-3">
         {tab === 'pipeline' && (
           <PipelineTab 
             obras={obras}
@@ -623,7 +625,7 @@ export default function App() {
         </button>
       )}
 
-      {/* Barra de Navegación Flotante Estilo iOS */}
+      {/* BARRA DE NAVEGACIÓN 100% FIJA ABAJO */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
       {/* Panel de Metas y Rendimiento */}
