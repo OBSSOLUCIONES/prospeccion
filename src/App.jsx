@@ -74,6 +74,29 @@ function formatearFechaParaPowerBI(fechaStr) {
   return { fecha_corta: fechaCorta, id_fecha: idFecha, hora, iso };
 }
 
+// FUNCIÓN SANITIZADORA UNIVERSAL: Convierte a MAYÚSCULAS protegiendo URLs, fotos y números
+function sanitizarAMayusculas(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const camposExcluidos = [
+    'url', 'fotos', 'documentoAdjunto', 'ubicacion', 
+    'createdAt', 'created_at', 'fecha', 'id_fecha', 'iso', 
+    'lat', 'lng', 'latGpsReal', 'lngGpsReal', 
+    'distanciaMetros', 'distanciaAuditoriaMetros', 'accuracy', 'monto'
+  ];
+
+  const res = Array.isArray(obj) ? [...obj] : { ...obj };
+  for (const [clave, valor] of Object.entries(res)) {
+    if (camposExcluidos.includes(clave)) continue;
+    if (typeof valor === 'string') {
+      if (valor.startsWith('data:image/') || valor.startsWith('http://') || valor.startsWith('https://')) {
+        continue;
+      }
+      res[clave] = valor.trim().toUpperCase();
+    }
+  }
+  return res;
+}
+
 export default function App() {
   const [tab, setTab] = useState('pipeline');
   const [mostrarSplash, setMostrarSplash] = useState(true);
@@ -310,26 +333,32 @@ export default function App() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [usuarioActivo]);
 
+  // GUARDAR OBRA (100% EN MAYÚSCULAS)
   const handleGuardarObra = async (nuevaObra) => {
+    const obraLimpia = sanitizarAMayusculas(nuevaObra);
+
     if (obraAEditar) {
-      setObras(prev => prev.map(o => o.id === obraAEditar.id ? nuevaObra : o));
-      if (obraSeleccionada && obraSeleccionada.id === nuevaObra.id) setObraSeleccionada(nuevaObra);
+      setObras(prev => prev.map(o => o.id === obraAEditar.id ? obraLimpia : o));
+      if (obraSeleccionada && obraSeleccionada.id === obraLimpia.id) setObraSeleccionada(obraLimpia);
       setObraAEditar(null);
     } else {
-      setObras(prev => [nuevaObra, ...prev]);
+      setObras(prev => [obraLimpia, ...prev]);
     }
-    await guardarObraDB(nuevaObra);
+    await guardarObraDB(obraLimpia);
     refrescarConteoOffline();
   };
 
+  // GUARDAR CLIENTE (100% EN MAYÚSCULAS)
   const handleGuardarCliente = async (nuevoCliente) => {
+    const clienteLimpio = sanitizarAMayusculas(nuevoCliente);
+
     if (clienteAEditar) {
-      setClientes(prev => prev.map(c => c.id === clienteAEditar.id ? nuevoCliente : c));
+      setClientes(prev => prev.map(c => c.id === clienteAEditar.id ? clienteLimpio : c));
       setClienteAEditar(null);
     } else {
-      setClientes(prev => [nuevoCliente, ...prev]);
+      setClientes(prev => [clienteLimpio, ...prev]);
     }
-    await guardarClienteDB(nuevoCliente);
+    await guardarClienteDB(clienteLimpio);
     refrescarConteoOffline();
   };
 
@@ -353,12 +382,14 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // GUARDAR VISITA (100% EN MAYÚSCULAS)
   const handleGuardarVisita = async (nuevaVisita) => {
-    // Guardado instantáneo en la vista de la tablet
-    setVisitas(prev => [nuevaVisita, ...prev]);
+    const visitaLimpia = sanitizarAMayusculas(nuevaVisita);
+
+    setVisitas(prev => [visitaLimpia, ...prev]);
     setObras(prev => prev.map(o => {
-      if (o.id === nuevaVisita.obraId) {
-        const obraActualizada = { ...o, estatusFase: nuevaVisita.estatus };
+      if (o.id === visitaLimpia.obraId) {
+        const obraActualizada = { ...o, estatusFase: visitaLimpia.estatus };
         guardarObraDB(obraActualizada);
         if (obraSeleccionada && obraSeleccionada.id === o.id) setObraSeleccionada(obraActualizada);
         return obraActualizada;
@@ -366,18 +397,20 @@ export default function App() {
       return o;
     }));
 
-    // Enviar a Supabase o encolar para sincronización posterior
-    await guardarVisitaDB(nuevaVisita);
+    await guardarVisitaDB(visitaLimpia);
     refrescarConteoOffline();
   };
 
+  // GUARDAR MOVIMIENTO (100% EN MAYÚSCULAS)
   const handleGuardarMovimiento = async (nuevoMov) => {
+    const movLimpio = sanitizarAMayusculas(nuevoMov);
+
     setMovimientos(prev => {
-      const existe = prev.some(m => m.id === nuevoMov.id);
-      if (existe) return prev.map(m => m.id === nuevoMov.id ? nuevoMov : m);
-      return [nuevoMov, ...prev];
+      const existe = prev.some(m => m.id === movLimpio.id);
+      if (existe) return prev.map(m => m.id === movLimpio.id ? movLimpio : m);
+      return [movLimpio, ...prev];
     });
-    await guardarMovimientoDB(nuevoMov);
+    await guardarMovimientoDB(movLimpio);
     refrescarConteoOffline();
   };
 

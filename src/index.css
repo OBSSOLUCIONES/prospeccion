@@ -31,6 +31,21 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
+
+  /* FORZAR MAYÚSCULAS VISUALES EN ENTRADAS DE TEXTO Y NOTAS (ESTILO ERP EMPRESARIAL) */
+  input[type="text"],
+  textarea {
+    text-transform: uppercase;
+  }
+
+  /* Excepciones que no deben forzar mayúsculas */
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="datetime-local"],
+  input[type="date"] {
+    text-transform: none;
+  }
 }
 
 /* Área Segura para Tablets y Celulares con Notch / Barra Inferior Android */
