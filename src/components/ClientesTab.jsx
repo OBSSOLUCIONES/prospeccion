@@ -5,21 +5,32 @@ import {
   Search, MessageCircle, Building2, User
 } from 'lucide-react';
 
-export default function ClientesTab({ clientes, onNuevoCliente, onEditarCliente, onEliminarCliente, onAbrirRuta }) {
+export default function ClientesTab({ 
+  clientes = [], 
+  onNuevoCliente, 
+  onEditarCliente, 
+  onEliminarCliente, 
+  onAbrirRuta,
+  esDirector = false,
+  filtroSucursal = 'TODAS'
+}) {
   const [busqueda, setBusqueda] = useState('');
 
-  const clientesFiltrados = clientes.filter(cli => {
-    const q = busqueda.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      (cli.nombreCliente && cli.nombreCliente.toLowerCase().includes(q)) ||
-      (cli.responsable && cli.responsable.toLowerCase().includes(q)) ||
-      (cli.id && cli.id.toLowerCase().includes(q)) ||
-      (cli.idRedAzul && cli.idRedAzul.toLowerCase().includes(q)) ||
-      (cli.tipoCliente && cli.tipoCliente.toLowerCase().includes(q)) ||
-      (cli.direccion && cli.direccion.toLowerCase().includes(q))
-    );
-  });
+  // Filtro por sucursal seleccionada + texto de búsqueda
+  const clientesFiltrados = clientes
+    .filter(cli => filtroSucursal === 'TODAS' || cli.sucursal === filtroSucursal)
+    .filter(cli => {
+      const q = busqueda.toLowerCase().trim();
+      if (!q) return true;
+      return (
+        (cli.nombreCliente && cli.nombreCliente.toLowerCase().includes(q)) ||
+        (cli.responsable && cli.responsable.toLowerCase().includes(q)) ||
+        (cli.id && cli.id.toLowerCase().includes(q)) ||
+        (cli.idRedAzul && cli.idRedAzul.toLowerCase().includes(q)) ||
+        (cli.tipoCliente && cli.tipoCliente.toLowerCase().includes(q)) ||
+        (cli.direccion && cli.direccion.toLowerCase().includes(q))
+      );
+    });
 
   const limpiarTelefono = (tel) => (tel ? tel.replace(/\D/g, '') : '');
 
@@ -36,7 +47,7 @@ export default function ClientesTab({ clientes, onNuevoCliente, onEditarCliente,
   return (
     <div className="space-y-2.5 pb-24">
       
-      {/* ENCABEZADO Y ALTA RÁPIDA */}
+      {/* ENCABEZADO Y ALTA RÁPIDA (EL BOTÓN +CLIENTE SOLO SE MUESTRA A ASESORES, NO AL DIRECTOR) */}
       <div className="flex items-center justify-between gap-2">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -49,25 +60,36 @@ export default function ClientesTab({ clientes, onNuevoCliente, onEditarCliente,
           />
         </div>
 
-        <button
-          type="button"
-          onClick={onNuevoCliente}
-          className="h-10 px-3.5 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white rounded-2xl text-xs font-black shadow-xs flex items-center gap-1.5 shrink-0 transition-all">
-          <UserPlus className="w-4 h-4 stroke-[2.5]" />
-          <span>+ Cliente</span>
-        </button>
+        {!esDirector && (
+          <button
+            type="button"
+            onClick={onNuevoCliente}
+            className="h-10 px-3.5 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white rounded-2xl text-xs font-black shadow-xs flex items-center gap-1.5 shrink-0 transition-all">
+            <UserPlus className="w-4 h-4 stroke-[2.5]" />
+            <span>+ Cliente</span>
+          </button>
+        )}
       </div>
 
-      <div className="px-1 text-[11px] font-semibold text-slate-400">
-        {clientesFiltrados.length} clientes en directorio
+      <div className="flex items-center justify-between px-1 text-[11px] font-semibold text-slate-400">
+        <span>{clientesFiltrados.length} clientes {filtroSucursal !== 'TODAS' ? `en ${filtroSucursal}` : 'totales'}</span>
+        {filtroSucursal !== 'TODAS' && (
+          <span className="font-extrabold text-[#001757] bg-blue-50 px-2 py-0.5 rounded-md">
+            {filtroSucursal}
+          </span>
+        )}
       </div>
 
-      {/* LISTADO DE CLIENTES COMPACTOS */}
+      {/* LISTADO DE CLIENTES */}
       {clientesFiltrados.length === 0 ? (
         <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center space-y-1.5">
           <Building2 className="w-8 h-8 text-slate-300 mx-auto" />
           <p className="text-xs font-black text-slate-800">No encontramos ningún cliente</p>
-          <p className="text-[11px] text-slate-400">Intenta con otra palabra o registra uno nuevo.</p>
+          <p className="text-[11px] text-slate-400">
+            {filtroSucursal !== 'TODAS' 
+              ? `No hay clientes registrados en la sucursal ${filtroSucursal}.` 
+              : 'Intenta con otra palabra de búsqueda.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -81,7 +103,7 @@ export default function ClientesTab({ clientes, onNuevoCliente, onEditarCliente,
                 onClick={() => onEditarCliente(cli)}
                 className="w-full bg-white hover:border-[#0091FB] active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/90 px-3.5 py-3 shadow-2xs hover:shadow-sm transition-all space-y-2">
                 
-                {/* LÍNEA 1: NOMBRE + SUCURSAL + BADGES */}
+                {/* LÍNEA 1: ID + NOMBRE + BADGES */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex items-center gap-1.5">
                     <span className="font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] shrink-0">
@@ -102,7 +124,7 @@ export default function ClientesTab({ clientes, onNuevoCliente, onEditarCliente,
                   </div>
                 </div>
 
-                {/* LÍNEA 2: ENCARGADO Y UBICACIÓN */}
+                {/* LÍNEA 2: ENCARGADO Y DIRECCIÓN */}
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                   <p className="truncate font-semibold flex items-center gap-1 text-[11px]">
                     <User className="w-3 h-3 text-[#0091FB] shrink-0" />
@@ -115,7 +137,7 @@ export default function ClientesTab({ clientes, onNuevoCliente, onEditarCliente,
                   </p>
                 </div>
 
-                {/* LÍNEA 3: ACCIONES RÁPIDAS COMPACTAS */}
+                {/* LÍNEA 3: ACCIONES RÁPIDAS */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                   
                   {/* Botones de Contacto */}

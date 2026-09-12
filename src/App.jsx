@@ -135,9 +135,9 @@ export default function App() {
     itemAEliminar
   );
 
-  // DETECCIÓN INTELIGENTE DE PROXIMIDAD (<180M DE UNA OBRA)
+  // Detección inteligente de proximidad (<180m de una obra) - Solo para asesores
   const obraProxima = useMemo(() => {
-    if (!tabletPos?.lat || !tabletPos?.lng) return null;
+    if (esDirector || !tabletPos?.lat || !tabletPos?.lng) return null;
     for (const o of obras) {
       if (!o.lat || !o.lng || o.estadoObra === 'TERMINADA') continue;
       const dist = calcularDistanciaMetros(tabletPos.lat, tabletPos.lng, o.lat, o.lng);
@@ -146,7 +146,7 @@ export default function App() {
       }
     }
     return null;
-  }, [tabletPos, obras]);
+  }, [tabletPos, obras, esDirector]);
 
   // Sincronización nube
   const recargarDatosNube = useCallback(async () => {
@@ -330,7 +330,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR POWER BI LIMPIO
+  // EXPORTADOR POWER BI SEGÚN SUCURSAL SELECCIONADA POR EL DIRECTOR
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -412,38 +412,43 @@ export default function App() {
       };
     });
 
-    // 3. Fact_Visitas (Limpio sin firma)
-    const hojaVisitas = visitas.map(v => ({
-      visita_id: v.id,
-      obra_id: v.obraId,
-      sucursal: v.sucursal,
-      asesor_nombre: v.asesorNombre || 'Asesor',
-      fecha_hora: v.fecha ? v.fecha.replace(' ', 'T') : null,
-      fase_detectada: v.estatus,
-      actividad: v.actividad,
-      distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
-      estado_auditoria_gps: v.auditoriaEstado || 'remoto',
-      latitud_real_gps: v.latGpsReal ? Number(parseFloat(v.latGpsReal).toFixed(6)) : null,
-      longitud_real_gps: v.lngGpsReal ? Number(parseFloat(v.lngGpsReal).toFixed(6)) : null,
-      cantidad_fotos: (v.fotos || []).length,
-      observaciones: v.observaciones || ''
-    }));
+    // 3. Fact_Visitas
+    const hojaVisitas = visitas
+      .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
+      .map(v => ({
+        visita_id: v.id,
+        obra_id: v.obraId,
+        sucursal: v.sucursal,
+        asesor_nombre: v.asesorNombre || 'Asesor',
+        fecha_hora: v.fecha ? v.fecha.replace(' ', 'T') : null,
+        fase_detectada: v.estatus,
+        actividad: v.actividad,
+        distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
+        estado_auditoria_gps: v.auditoriaEstado || 'remoto',
+        latitud_real_gps: v.latGpsReal ? Number(parseFloat(v.latGpsReal).toFixed(6)) : null,
+        longitud_real_gps: v.lngGpsReal ? Number(parseFloat(v.lngGpsReal).toFixed(6)) : null,
+        cantidad_fotos: (v.fotos || []).length,
+        observaciones: v.observaciones || ''
+      }));
 
     // 4. Fact_Movimientos
-    const hojaMovimientos = movimientos.map(m => ({
-      movimiento_id: m.id,
-      obra_id: m.obraId,
-      tipo_movimiento: m.tipo,
-      tipo_comprobante: m.comprobante || (m.tipo === 'VENTA' ? 'REMISION' : 'COTIZACION'),
-      folio_documento: m.folio,
-      monto_mxn: Number(m.monto) || 0,
-      estatus: m.estatus || 'PENDIENTE',
-      forma_pago: m.formaPago || 'N/A',
-      tipo_entrega: m.tipoEntrega || 'DOMICILIO',
-      fecha_hora: m.fecha ? m.fecha.replace(' ', 'T') : null,
-      cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
-      tiene_adjunto: m.documentoAdjunto?.url ? 'SI' : 'NO'
-    }));
+    const obrasIdsValidas = obrasAExportar.map(o => o.id);
+    const hojaMovimientos = movimientos
+      .filter(m => obrasIdsValidas.includes(m.obraId))
+      .map(m => ({
+        movimiento_id: m.id,
+        obra_id: m.obraId,
+        tipo_movimiento: m.tipo,
+        tipo_comprobante: m.comprobante || (m.tipo === 'VENTA' ? 'REMISION' : 'COTIZACION'),
+        folio_documento: m.folio,
+        monto_mxn: Number(m.monto) || 0,
+        estatus: m.estatus || 'PENDIENTE',
+        forma_pago: m.formaPago || 'N/A',
+        tipo_entrega: m.tipoEntrega || 'DOMICILIO',
+        fecha_hora: m.fecha ? m.fecha.replace(' ', 'T') : null,
+        cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
+        tiene_adjunto: m.documentoAdjunto?.url ? 'SI' : 'NO'
+      }));
 
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaClientes), 'Dim_Clientes');
@@ -483,9 +488,11 @@ export default function App() {
         usuarioActivo={usuarioActivo}
         onLogout={() => setUsuarioActivo(null)}
         onAbrirKpis={() => setModalKpisAbierto(true)}
+        filtroSucursal={filtroSucursal}
+        setFiltroSucursal={setFiltroSucursal}
       />
 
-      {/* BANNER INTELIGENTE: PROXIMIDAD A OBRA */}
+      {/* BANNER INTELIGENTE: PROXIMIDAD A OBRA (SOLO ASESORES) */}
       {obraProxima && !algunModalAbierto && (
         <div className="mx-3 mt-2.5 p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
           <div className="min-w-0">
@@ -542,6 +549,8 @@ export default function App() {
             }}
             onEliminarCliente={(c) => setItemAEliminar({ tipo: 'cliente', data: c })}
             onAbrirRuta={setDestinoRuta}
+            esDirector={esDirector}
+            filtroSucursal={filtroSucursal}
           />
         )}
 
@@ -559,7 +568,8 @@ export default function App() {
         )}
       </main>
 
-      {!algunModalAbierto && (
+      {/* BOTÓN FLOTANTE INFERIOR: OCULTO PARA EL DIRECTOR */}
+      {!algunModalAbierto && !esDirector && (
         <button
           type="button"
           onClick={() => {
@@ -647,7 +657,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* CHECK-IN VISITA LIMPIO */}
+      {/* CHECK-IN VISITA */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
         onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); }}
