@@ -16,6 +16,7 @@ import BottomNav from './components/BottomNav';
 import PipelineTab from './components/PipelineTab';
 import ClientesTab from './components/ClientesTab';
 import MapaTab from './components/MapaTab';
+import ResumenKpis from './components/ResumenKpis';
 
 import ModalExpedienteObra from './components/ModalExpedienteObra';
 import ModalObra from './components/ModalObra';
@@ -101,6 +102,7 @@ export default function App() {
   const [modalCliente, setModalCliente] = useState(false);
   const [clienteAEditar, setClienteAEditar] = useState(null);
 
+  const [modalKpisAbierto, setModalKpisAbierto] = useState(false);
   const [visorModal, setVisorModal] = useState(null);
   const [mapaPickerConfig, setMapaPickerConfig] = useState(null);
   const [destinoRuta, setDestinoRuta] = useState(null);
@@ -113,6 +115,7 @@ export default function App() {
     modalVisitaAbierto || 
     modalComercialAbierto || 
     modalCliente || 
+    modalKpisAbierto ||
     mapaPickerConfig || 
     visorModal || 
     destinoRuta ||
@@ -290,6 +293,7 @@ export default function App() {
     }
   };
 
+  // EXPORTADOR CON ESQUEMA ESTRELLA 100% COMPATIBLE CON POWER BI Y EXCEL
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -297,78 +301,98 @@ export default function App() {
       ? obras
       : obras.filter(o => o.sucursal === filtroSucursal);
 
-    const hojaResumen = obrasAExportar.map(obra => {
-      const cli = clientes.find(c => c.id === obra.clienteId);
-      const visitasObra = visitas.filter(v => v.obraId === obra.id);
-      const movsObra = movimientos.filter(m => m.obraId === obra.id);
+    // 1. Tabla Dim_Obras
+    const hojaObras = obrasAExportar.map(o => {
+      const cli = clientes.find(c => c.id === o.clienteId);
+      const visObra = visitas.filter(v => v.obraId === o.id);
+      const movsObra = movimientos.filter(m => m.obraId === o.id);
       
-      const cotizado = movsObra.filter(m => m.tipo === 'COTIZACION').reduce((s, c) => s + (Number(c.monto) || 0), 0);
-      const ventasRemision = movsObra.filter(m => m.tipo === 'VENTA' && m.comprobante === 'REMISIÓN').reduce((s, v) => s + (Number(v.monto) || 0), 0);
-      const ventasFactura = movsObra.filter(m => m.tipo === 'VENTA' && m.comprobante === 'FACTURA').reduce((s, v) => s + (Number(v.monto) || 0), 0);
-      const totalVendido = ventasRemision + ventasFactura;
-      const ultima = visitasObra.sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')))[0];
+      const ultima = visObra.sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')))[0];
+      const diasSinVisita = ultima 
+        ? Math.max(0, Math.floor((Date.now() - new Date(ultima.fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24)))
+        : 999;
+
+      const totalCotizado = movsObra.filter(m => m.tipo === 'COTIZACION').reduce((s, c) => s + (Number(c.monto) || 0), 0);
+      const totalVendido = movsObra.filter(m => m.tipo === 'VENTA').reduce((s, v) => s + (Number(v.monto) || 0), 0);
 
       return {
-        'ID OBRA': obra.id,
-        'NOMBRE OBRA': obra.nombre,
-        'ESTADO COMERCIAL': obra.estadoObra || 'ACTIVA',
-        'SUCURSAL': obra.sucursal,
-        'CLIENTE': cli ? cli.nombreCliente : 'SIN ASIGNAR',
-        'ENCARGADO': cli?.responsable || 'S/N',
-        'TELÉFONO': cli?.contacto || 'S/N',
-        'FASE ACTUAL': obra.estatusFase,
-        'TOTAL VISITAS': visitasObra.length,
-        'ÚLTIMA VISITA': ultima ? ultima.fecha : 'Sin visitas',
-        'TOTAL COTIZADO': cotizado,
-        'VENTAS REMISIÓN': ventasRemision,
-        'VENTAS FACTURA': ventasFactura,
-        'TOTAL VENDIDO': totalVendido,
-        'DIRECCIÓN': obra.direccion || 'S/N'
+        obra_id: o.id,
+        cliente_id: o.clienteId || 'SIN_CLIENTE',
+        nombre_obra: o.nombre,
+        sucursal: o.sucursal,
+        tipo_desarrollo: o.tipoDesarrollo || 'OBRA NUEVA',
+        fase_constructiva: o.estatusFase,
+        estado_comercial: o.estadoObra || 'ACTIVA',
+        nombre_cliente: cli ? cli.nombreCliente : 'SIN ASIGNAR',
+        responsable_cliente: cli?.responsable || 'SIN DATO',
+        telefono_cliente: cli?.contacto || 'SIN DATO',
+        total_visitas: visObra.length,
+        dias_sin_visita: diasSinVisita,
+        alerta_obra_fria: diasSinVisita > 12 ? 'SI' : 'NO',
+        fecha_ultima_visita: ultima ? ultima.fecha.replace(' ', 'T') : null,
+        total_cotizado_mxn: totalCotizado,
+        total_vendido_mxn: totalVendido,
+        latitud: o.lat ? Number(parseFloat(o.lat).toFixed(6)) : null,
+        longitud: o.lng ? Number(parseFloat(o.lng).toFixed(6)) : null,
+        direccion: o.direccion || ''
       };
     });
 
-    const hojaVisitas = visitas.map(v => {
-      const obra = obras.find(o => o.id === v.obraId);
-      return {
-        'FOLIO VISITA': v.id,
-        'OBRA': obra ? obra.nombre : 'S/N',
-        'SUCURSAL': v.sucursal,
-        'FECHA Y HORA': v.fecha,
-        'ASESOR': v.asesorNombre || 'Asesor',
-        'FASE DETECTADA': v.estatus,
-        'ACTIVIDAD': v.actividad,
-        'AUDITORÍA SATELITAL': v.auditoriaEstado === 'en_sitio' ? 'En Obra (Auditado)' : `A ${v.distanciaAuditoriaMetros}m`,
-        'OBSERVACIONES': v.observaciones,
-        'EVIDENCIAS FOTOGRÁFICAS': (v.fotos || []).join(' , ')
-      };
-    });
+    // 2. Tabla Fact_Visitas
+    const hojaVisitas = visitas.map(v => ({
+      visita_id: v.id,
+      obra_id: v.obraId,
+      sucursal: v.sucursal,
+      asesor_nombre: v.asesorNombre || 'Asesor',
+      fecha_hora: v.fecha ? v.fecha.replace(' ', 'T') : null,
+      fase_detectada: v.estatus,
+      actividad: v.actividad,
+      distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
+      estado_auditoria_gps: v.auditoriaEstado || 'remoto',
+      latitud_real_gps: v.latGpsReal ? Number(parseFloat(v.latGpsReal).toFixed(6)) : null,
+      longitud_real_gps: v.lngGpsReal ? Number(parseFloat(v.lngGpsReal).toFixed(6)) : null,
+      cantidad_fotos: (v.fotos || []).length,
+      observaciones: v.observaciones || ''
+    }));
 
-    const hojaComercial = movimientos.map(m => {
-      const obra = obras.find(o => o.id === m.obraId);
-      const esVenta = m.tipo === 'VENTA';
-      return {
-        'TIPO MOVIMIENTO': m.tipo,
-        'COMPROBANTE': m.comprobante || (esVenta ? 'REMISIÓN' : 'COTIZACIÓN'),
-        'FOLIO DOCUMENTO': m.folio,
-        'OBRA': obra ? obra.nombre : 'S/N',
-        'MONTO': m.monto,
-        'ESTATUS': m.estatus,
-        'FORMA DE PAGO': esVenta ? (m.formaPago || 'N/A') : 'N/A',
-        'TIPO ENTREGA': m.tipoEntrega,
-        'FECHA REGISTRO': m.fecha,
-        'COTIZACIÓN ORIGEN': m.cotizacionOrigenId || 'DIRECTA',
-        'OBSERVACIONES': m.observaciones
-      };
-    });
+    // 3. Tabla Fact_Movimientos
+    const hojaMovimientos = movimientos.map(m => ({
+      movimiento_id: m.id,
+      obra_id: m.obraId,
+      tipo_movimiento: m.tipo,
+      tipo_comprobante: m.comprobante || (m.tipo === 'VENTA' ? 'REMISION' : 'COTIZACION'),
+      folio_documento: m.folio,
+      monto_mxn: Number(m.monto) || 0,
+      estatus: m.estatus || 'PENDIENTE',
+      forma_pago: m.formaPago || 'N/A',
+      tipo_entrega: m.tipoEntrega || 'DOMICILIO',
+      fecha_hora: m.fecha ? m.fecha.replace(' ', 'T') : null,
+      cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
+      tiene_adjunto: m.documentoAdjunto?.url ? 'SI' : 'NO'
+    }));
 
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaResumen), 'Resumen de Obras');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaVisitas), 'Bitácora de Visitas');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaComercial), 'Cotizaciones y Ventas');
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaObras), 'Dim_Obras');
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaVisitas), 'Fact_Visitas');
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaMovimientos), 'Fact_Movimientos');
 
     const fechaHoy = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(libro, `Control_Obras_Reporte_${filtroSucursal}_${fechaHoy}.xlsx`);
+    XLSX.writeFile(libro, `PowerBI_Control_Obras_${filtroSucursal}_${fechaHoy}.xlsx`);
   };
+
+  // Cálculos dinámicos para el Panel de Metas
+  const hoyStr = new Date().toISOString().slice(0, 10);
+  const visitasHoy = visitas.filter(v => v.fecha && v.fecha.startsWith(hoyStr)).length;
+  const metaDiaria = 5;
+  const porcentajeMeta = Math.min(100, Math.round((visitasHoy / metaDiaria) * 100));
+  const totalMontoCotizaciones = movimientos.reduce((acc, m) => acc + (Number(m.monto) || 0), 0);
+  const ventasCerradasTotal = movimientos.filter(m => m.tipo === 'VENTA').length;
+  const totalObrasFrias = obras.filter(o => {
+    const vList = visitas.filter(v => v.obraId === o.id).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    if (!vList.length) return true;
+    const diff = Math.floor((Date.now() - new Date(vList[0].fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24));
+    return diff > 12;
+  }).length;
 
   if (!usuarioActivo) {
     return <PantallaPin usuarios={usuarios} onLogin={(u) => setUsuarioActivo(u)} />;
@@ -384,6 +408,7 @@ export default function App() {
         sincronizando={sincronizando}
         usuarioActivo={usuarioActivo}
         onLogout={() => setUsuarioActivo(null)}
+        onAbrirKpis={() => setModalKpisAbierto(true)}
       />
 
       <main className="w-full px-3 py-3 space-y-3">
@@ -426,6 +451,7 @@ export default function App() {
         {tab === 'mapa' && esDirector && (
           <MapaTab 
             tabletPos={tabletPos}
+            obras={obras}
             visitas={visitas}
             clientes={clientes}
             onAbrirRuta={setDestinoRuta}
@@ -456,6 +482,20 @@ export default function App() {
 
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
+      {/* PANEL DE METAS Y KPIS (AHORA TOTALMENTE CONECTADO) */}
+      <ResumenKpis
+        isOpen={modalKpisAbierto}
+        onClose={() => setModalKpisAbierto(false)}
+        sucursal={filtroSucursal}
+        visitasHoy={visitasHoy}
+        metaDiaria={metaDiaria}
+        porcentajeMeta={porcentajeMeta}
+        totalMonto={totalMontoCotizaciones}
+        totalObras={obras.length}
+        ventasCerradas={ventasCerradasTotal}
+        totalObrasFrias={totalObrasFrias}
+      />
+
       {/* EXPEDIENTE 360° */}
       <ModalExpedienteObra
         isOpen={Boolean(obraSeleccionada)}
@@ -485,7 +525,7 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
-      {/* CREAR / EDITAR OBRA (ESTABILIZADO SIN RESETEOS) */}
+      {/* CREAR / EDITAR OBRA */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -498,7 +538,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* ALTA / EDICIÓN DE CLIENTE (HOMOLOGADO A OBRA) */}
+      {/* ALTA / EDICIÓN DE CLIENTE */}
       <ModalCliente
         isOpen={modalCliente}
         onClose={() => { setModalCliente(false); setClienteAEditar(null); }}

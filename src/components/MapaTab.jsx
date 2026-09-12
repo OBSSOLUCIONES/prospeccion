@@ -70,23 +70,31 @@ function AccionesUsuarioEnMapa({ vueloDestino, onVueloCompletado }) {
   return null;
 }
 
-export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbrirRuta, filtroSucursal, setFiltroSucursal }) {
+export default function MapaTab({ 
+  tabletPos, 
+  obras = [], 
+  visitas = [], 
+  clientes = [], 
+  onAbrirRuta, 
+  filtroSucursal, 
+  setFiltroSucursal 
+}) {
   const [verObras, setVerObras] = useState(true);
   const [verClientes, setVerClientes] = useState(true);
   const [ordenVuelo, setOrdenVuelo] = useState(null);
 
-  // Centro inicial estático (no se recalcula a cada segundo)
   const centroInicial = [tabletPos?.lat || 19.6642, tabletPos?.lng || -101.1718];
 
-  const visitasPorSucursal = visitas.filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal);
+  const obrasPorSucursal = obras.filter(o => filtroSucursal === 'TODAS' || o.sucursal === filtroSucursal);
   const clientesPorSucursal = clientes.filter(c => filtroSucursal === 'TODAS' || c.sucursal === filtroSucursal);
 
-  const obrasConCoordenadas = visitasPorSucursal
-    .filter(v => v.latGpsReal || v.lat)
-    .map(v => ({
-      ...v,
-      latFinal: Number(v.lat || v.latGpsReal),
-      lngFinal: Number(v.lng || v.lngGpsReal)
+  // Obras reales georreferenciadas (incluso si no tienen visitas aún)
+  const obrasConCoordenadas = obrasPorSucursal
+    .filter(o => o.lat && o.lng)
+    .map(o => ({
+      ...o,
+      latFinal: parseFloat(o.lat),
+      lngFinal: parseFloat(o.lng)
     }));
 
   const handleCambiarSucursal = (sucursalSeleccionada) => {
@@ -166,7 +174,7 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
         </div>
       </div>
 
-      {/* CONTENEDOR DEL MAPA CON CONTROL TOTAL Y SIN RESETEOS */}
+      {/* CONTENEDOR DEL MAPA */}
       <div className="h-[68vh] w-full rounded-3xl overflow-hidden border border-slate-200 shadow-sm relative">
         <MapContainer 
           center={centroInicial} 
@@ -181,13 +189,12 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
           />
           
-          {/* Controlador pasivo sin loops */}
           <AccionesUsuarioEnMapa 
             vueloDestino={ordenVuelo} 
             onVueloCompletado={resetVuelo} 
           />
 
-          {/* Círculo suave de precisión de tu GPS */}
+          {/* Círculo de precisión GPS */}
           {tabletPos?.lat && tabletPos?.lng && (
             <Circle
               center={[tabletPos.lat, tabletPos.lng]}
@@ -202,41 +209,46 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
             />
           )}
 
-          {/* Pin de tu tablet / teléfono */}
+          {/* Tu ubicación */}
           {tabletPos?.lat && tabletPos?.lng && (
             <Marker position={[tabletPos.lat, tabletPos.lng]} icon={tuDispositivoIcon}>
               <Popup>
                 <div className="text-xs font-bold text-slate-800">
-                  <p className="text-[#0091FB] font-black">Tu Ubicación</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Precisión: ±{tabletPos.accuracy}m</p>
+                  <p className="text-[#0091FB] font-black">Tu Ubicación Actual</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Precisión GPS: ±{tabletPos.accuracy}m</p>
                 </div>
               </Popup>
             </Marker>
           )}
 
-          {/* PINES DE OBRAS */}
-          {verObras && obrasConCoordenadas.map(v => (
-            <Marker key={`obra-${v.id}`} position={[v.latFinal, v.lngFinal]} icon={obraIcon}>
+          {/* PINES DE OBRAS (Ahora muestra todas las obras) */}
+          {verObras && obrasConCoordenadas.map(obra => (
+            <Marker key={`obra-${obra.id}`} position={[obra.latFinal, obra.lngFinal]} icon={obraIcon}>
               <Popup>
-                <div className="text-xs space-y-1.5 min-w-[160px]">
+                <div className="text-xs space-y-1.5 min-w-[170px]">
                   <div>
-                    <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
-                      {v.id}
+                    <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      {obra.id}
                     </span>
-                    <h4 className="font-black text-slate-900 text-xs leading-tight mt-1">{v.proyecto || 'Obra'}</h4>
-                    <p className="text-[10px] text-slate-500 font-bold">{v.sucursal} • {v.estatus}</p>
+                    <h4 className="font-black text-slate-900 text-xs leading-tight mt-1 truncate">{obra.nombre}</h4>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                      {obra.sucursal} • {obra.estatusFase}
+                    </p>
+                    <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                      {obra.direccion || 'Ubicación satelital'}
+                    </p>
                   </div>
                   
                   <button
                     type="button"
                     onClick={() => onAbrirRuta({
-                      nombre: v.proyecto,
-                      direccion: v.direccionObra || `Folio ${v.id}`,
-                      lat: v.latFinal,
-                      lng: v.lngFinal
+                      nombre: obra.nombre,
+                      direccion: obra.direccion || `Obra ${obra.id}`,
+                      lat: obra.latFinal,
+                      lng: obra.lngFinal
                     })}
-                    className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors">
-                    <Navigation className="w-3 h-3" /> ¿Cómo llegar?
+                    className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors">
+                    <Navigation className="w-3 h-3" /> Iniciar Ruta GPS
                   </button>
                 </div>
               </Popup>
@@ -247,13 +259,13 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
           {verClientes && clientesPorSucursal.filter(c => c.lat && c.lng).map(c => (
             <Marker key={`cliente-${c.id}`} position={[parseFloat(c.lat), parseFloat(c.lng)]} icon={clienteIcon}>
               <Popup>
-                <div className="text-xs space-y-1.5 min-w-[160px]">
+                <div className="text-xs space-y-1.5 min-w-[170px]">
                   <div>
-                    <span className="font-mono text-[10px] font-bold text-[#001757] bg-blue-50 px-1.5 py-0.2 rounded">
+                    <span className="font-mono text-[10px] font-bold text-[#001757] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                       {c.id}
                     </span>
-                    <h4 className="font-black text-slate-900 text-xs leading-tight mt-1">{c.nombreCliente}</h4>
-                    <p className="text-[10px] text-slate-500 line-clamp-1">{c.direccion}</p>
+                    <h4 className="font-black text-slate-900 text-xs leading-tight mt-1 truncate">{c.nombreCliente}</h4>
+                    <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{c.direccion || 'Domicilio fiscal'}</p>
                   </div>
 
                   <button
@@ -264,8 +276,8 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
                       lat: parseFloat(c.lat),
                       lng: parseFloat(c.lng)
                     })}
-                    className="w-full py-1.5 px-2 bg-[#001757] hover:bg-[#00227a] text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors">
-                    <Navigation className="w-3 h-3 text-[#0091FB]" /> ¿Cómo llegar?
+                    className="w-full py-1.5 px-2 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors">
+                    <Navigation className="w-3 h-3 text-[#0091FB]" /> Iniciar Ruta GPS
                   </button>
                 </div>
               </Popup>
@@ -274,7 +286,7 @@ export default function MapaTab({ tabletPos, visitas = [], clientes = [], onAbri
 
         </MapContainer>
 
-        {/* BOTÓN FLOTANTE MI UBICACIÓN (FUERA DEL MAPCONTAINER PARA QUE RESPONDA AL INSTANTE) */}
+        {/* BOTÓN FLOTANTE MI UBICACIÓN */}
         <button
           type="button"
           onClick={handleCentrarMiGps}
