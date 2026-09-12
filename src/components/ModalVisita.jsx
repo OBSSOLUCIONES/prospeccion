@@ -57,6 +57,7 @@ export default function ModalVisita({
     setFecha(obtenerFechaHoraActual());
     setObservaciones('');
     setFotos([]);
+
     return () => {
       debeSeguirGrabandoRef.current = false;
       if (recognitionRef.current) {
@@ -171,7 +172,7 @@ export default function ModalVisita({
 
   return (
     <div className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
         
         {/* Cabecera Fija */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
@@ -264,7 +265,7 @@ export default function ModalVisita({
             )}
           </div>
 
-          {/* Notas */}
+          {/* Notas con Dictado por Voz */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="font-bold text-slate-800">Notas de Supervisión</label>
@@ -292,13 +293,13 @@ export default function ModalVisita({
 
         </form>
 
-        {/* Botón Fijo Inferior - Siempre visible */}
+        {/* Botón Fijo Inferior */}
         <div className="p-3.5 bg-white border-t border-slate-100 shrink-0">
           <button
             type="submit"
             form="form-visita"
             disabled={subiendoArchivo}
-            className="w-full h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2">
+            className="w-full h-12 rounded-2xl bg-[#001757] hover:bg-[#00227a] active:scale-98 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2">
             <Check className="w-5 h-5 stroke-[3]" />
             <span>Completar Visita en Sitio</span>
           </button>

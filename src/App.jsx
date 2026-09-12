@@ -1,7 +1,7 @@
 // src/App.jsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { Plus, UserPlus, AlertTriangle, Building2 } from 'lucide-react';
+import { Plus, UserPlus, AlertTriangle, Building2, Zap, MapPin } from 'lucide-react';
 
 import { 
   CLIENTES_INICIALES, 
@@ -45,6 +45,20 @@ import {
   suscribirPosicionesEnVivo,
   suscribirCambiosGlobales
 } from './lib/supabase';
+
+function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 99999;
+  const R = 6371e3;
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
 
 export default function App() {
   const [tab, setTab] = useState('pipeline');
@@ -114,14 +128,27 @@ export default function App() {
     modalVisitaAbierto || 
     modalComercialAbierto || 
     modalCliente || 
-    modalKpisAbierto ||
+    modalKpisAbierto || 
     mapaPickerConfig || 
     visorModal || 
     destinoRuta ||
     itemAEliminar
   );
 
-  // FUNCIÓN MAESTRA DE DESCARGA DESDE LA NUBE
+  // DETECCIÓN INTELIGENTE DE PROXIMIDAD (<180M DE UNA OBRA)
+  const obraProxima = useMemo(() => {
+    if (!tabletPos?.lat || !tabletPos?.lng) return null;
+    for (const o of obras) {
+      if (!o.lat || !o.lng || o.estadoObra === 'TERMINADA') continue;
+      const dist = calcularDistanciaMetros(tabletPos.lat, tabletPos.lng, o.lat, o.lng);
+      if (dist <= 180) {
+        return { obra: o, distancia: dist };
+      }
+    }
+    return null;
+  }, [tabletPos, obras]);
+
+  // Sincronización nube
   const recargarDatosNube = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     try {
@@ -149,13 +176,11 @@ export default function App() {
     }
   }, [esDirector]);
 
-  // Sincronización inicial y escucha EN VIVO sin presionar F5
   useEffect(() => {
     recargarDatosNube();
 
     if (isSupabaseConfigured) {
       const desuscribirCambios = suscribirCambiosGlobales(() => {
-        // En cuanto el celular o la PC tocan algo, la otra pantalla se actualiza en vivo
         recargarDatosNube();
       });
 
@@ -171,7 +196,7 @@ export default function App() {
     }
   }, [recargarDatosNube, esDirector]);
 
-  // Persistencia local como respaldo de seguridad
+  // Persistencia local
   useEffect(() => { localStorage.setItem('app_obras_maestras', JSON.stringify(obras)); }, [obras]);
   useEffect(() => { localStorage.setItem('app_obras_bitacora_visitas', JSON.stringify(visitas)); }, [visitas]);
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
@@ -247,7 +272,6 @@ export default function App() {
     }
   };
 
-  // Borrado Real en Supabase
   const ejecutarEliminacion = async () => {
     if (!itemAEliminar) return;
 
@@ -306,7 +330,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR COMPLETO POWER BI (4 HOJAS)
+  // EXPORTADOR POWER BI LIMPIO
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -388,7 +412,7 @@ export default function App() {
       };
     });
 
-    // 3. Fact_Visitas
+    // 3. Fact_Visitas (Limpio sin firma)
     const hojaVisitas = visitas.map(v => ({
       visita_id: v.id,
       obra_id: v.obraId,
@@ -460,6 +484,29 @@ export default function App() {
         onLogout={() => setUsuarioActivo(null)}
         onAbrirKpis={() => setModalKpisAbierto(true)}
       />
+
+      {/* BANNER INTELIGENTE: PROXIMIDAD A OBRA */}
+      {obraProxima && !algunModalAbierto && (
+        <div className="mx-3 mt-2.5 p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+          <div className="min-w-0">
+            <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+              <MapPin className="w-3 h-3" /> Estás en la obra ({obraProxima.distancia}m)
+            </span>
+            <h4 className="text-xs sm:text-sm font-black truncate mt-1">{obraProxima.obra.nombre}</h4>
+            <p className="text-[10px] text-emerald-100 truncate">{obraProxima.obra.sucursal} • {obraProxima.obra.estatusFase}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setObraParaVisita(obraProxima.obra);
+              setModalVisitaAbierto(true);
+            }}
+            className="px-3.5 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-black text-xs rounded-xl shadow-md shrink-0 active:scale-95 transition-all flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <span>Check-in Rápido</span>
+          </button>
+        </div>
+      )}
 
       <main className="w-full px-3 py-3 space-y-3">
         {tab === 'pipeline' && (
@@ -600,7 +647,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* CHECK-IN VISITA */}
+      {/* CHECK-IN VISITA LIMPIO */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
         onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); }}
