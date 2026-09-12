@@ -1,7 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { Plus, UserPlus, AlertTriangle, Building2, Zap, MapPin } from 'lucide-react';
+import { AlertTriangle, MapPin, Zap } from 'lucide-react';
 
 import { 
   CLIENTES_INICIALES, 
@@ -324,6 +324,7 @@ export default function App() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [usuarioActivo]);
 
+  // Guardar Obra (Seguro con Supabase)
   const handleGuardarObra = async (nuevaObra) => {
     const obraLimpia = sanitizarAMayusculas(nuevaObra);
     if (obraAEditar) {
@@ -337,6 +338,7 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // Guardar Cliente (Seguro con Supabase)
   const handleGuardarCliente = async (nuevoCliente) => {
     const clienteLimpio = sanitizarAMayusculas(nuevoCliente);
     if (clienteAEditar) {
@@ -349,6 +351,7 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // Eliminación con borrado en cascada en Supabase
   const ejecutarEliminacion = async () => {
     if (!itemAEliminar) return;
 
@@ -369,6 +372,7 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // Guardar Visita (Seguro con Supabase)
   const handleGuardarVisita = async (nuevaVisita) => {
     const visitaLimpia = sanitizarAMayusculas(nuevaVisita);
     setVisitas(prev => [visitaLimpia, ...prev]);
@@ -386,6 +390,7 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // Guardar Venta o Cotización (Seguro con Supabase)
   const handleGuardarMovimiento = async (nuevoMov) => {
     const movLimpio = sanitizarAMayusculas(nuevoMov);
     setMovimientos(prev => {
@@ -568,12 +573,10 @@ export default function App() {
     return diff > 12;
   }).length;
 
-  // 1. Splash Screen
   if (mostrarSplash) {
     return <SplashScreen onFinish={() => setMostrarSplash(false)} />;
   }
 
-  // 2. PIN
   if (!usuarioActivo) {
     return <PantallaPin usuarios={usuarios} onLogin={(u) => setUsuarioActivo(u)} />;
   }
@@ -581,7 +584,7 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[58px] sm:pt-[70px] font-sans">
       
-      {/* HEADER ELÁSTICO */}
+      {/* HEADER */}
       <Header 
         gpsEstado={gpsEstado} 
         tabletPos={tabletPos} 
@@ -597,7 +600,7 @@ export default function App() {
         onForzarSincronizacion={ejecutarSincronizacionOffline}
       />
 
-      {/* DYNAMIC ISLAND (Centrado universal hasta 7XL) */}
+      {/* DYNAMIC ISLAND */}
       {obraProxima && !algunModalAbierto && (
         <div className="max-w-7xl mx-auto px-3 sm:px-6 mb-2.5">
           <div className="p-3.5 bg-[#000b26]/95 text-white rounded-3xl shadow-lg border border-slate-700/60 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-200">
@@ -628,7 +631,7 @@ export default function App() {
         </div>
       )}
 
-      {/* CONTENEDOR MAESTRO: Ajusta el ancho automáticamente a celular, tablet o monitor */}
+      {/* CONTENEDOR MAESTRO */}
       <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1 space-y-3">
         {tab === 'pipeline' && (
           <PipelineTab 
@@ -651,6 +654,14 @@ export default function App() {
             onNuevaVisita={(obra) => {
               setObraParaVisita(obra);
               setModalVisitaAbierto(true);
+            }}
+            onNuevoMovimiento={({ obra, tipo }) => {
+              setConfigComercial({ obra, tipo });
+              setModalComercialAbierto(true);
+            }}
+            onNuevoCliente={() => {
+              setClienteAEditar(null);
+              setModalCliente(true);
             }}
           />
         )}
@@ -687,29 +698,10 @@ export default function App() {
         )}
       </main>
 
-      {/* Botón Flotante (Se ajusta al margen derecho del dispositivo) */}
-      {!algunModalAbierto && !esDirector && (
-        <button
-          type="button"
-          onClick={() => {
-            if (tab === 'clientes') {
-              setClienteAEditar(null);
-              setModalCliente(true);
-            } else {
-              setObraAEditar(null);
-              setModalObraAbierto(true);
-            }
-          }}
-          className="fixed bottom-24 right-4 sm:right-8 lg:right-12 z-30 bg-gradient-to-r from-[#001757] via-[#00227a] to-[#0091FB] hover:brightness-105 active:scale-95 text-white px-5 py-3.5 rounded-3xl shadow-xl flex items-center gap-2 font-black text-xs sm:text-sm transition-all border border-white/20">
-          {tab === 'clientes' ? <UserPlus className="w-5 h-5 stroke-[2.4]" /> : <Building2 className="w-5 h-5 stroke-[2.4]" />}
-          <span>{tab === 'clientes' ? '+ Nuevo Cliente' : '+ Nueva Obra'}</span>
-        </button>
-      )}
-
-      {/* Barra Inferior */}
+      {/* BARRA DE NAVEGACIÓN INFERIOR */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* Panel de Metas */}
+      {/* MODALES */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
@@ -728,7 +720,6 @@ export default function App() {
         onSeleccionarSucursal={(suc) => setFiltroSucursal(suc)}
       />
 
-      {/* Expediente 360° */}
       <ModalExpedienteObra
         isOpen={Boolean(obraSeleccionada)}
         onClose={() => setObraSeleccionada(null)}
@@ -757,7 +748,6 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
-      {/* Modal Obra */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -770,7 +760,6 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* Modal Cliente */}
       <ModalCliente
         isOpen={modalCliente}
         onClose={() => { setModalCliente(false); setClienteAEditar(null); }}
@@ -782,7 +771,6 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* Modal Visita */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
         onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); }}
@@ -792,7 +780,6 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* Modal Comercial */}
       <ModalComercial
         isOpen={modalComercialAbierto}
         onClose={() => { setModalComercialAbierto(false); setConfigComercial(null); }}
@@ -801,7 +788,6 @@ export default function App() {
         onSave={handleGuardarMovimiento}
       />
 
-      {/* Modal Mapa Picker */}
       {mapaPickerConfig && (
         <ModalMapaPicker 
           isOpen={true}
@@ -815,20 +801,17 @@ export default function App() {
         />
       )}
 
-      {/* Modal Navegación */}
       <ModalNavegacion 
         isOpen={Boolean(destinoRuta)}
         onClose={() => setDestinoRuta(null)}
         destino={destinoRuta}
       />
 
-      {/* Visor Multimedia */}
       <ModalVisor 
         visorModal={visorModal}
         onClose={() => setVisorModal(null)}
       />
 
-      {/* Confirmación Borrado */}
       {itemAEliminar && (
         <div className="fixed inset-0 z-[110] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200">
@@ -847,7 +830,7 @@ export default function App() {
                 </strong>
                 {itemAEliminar.tipo === 'obra' && (
                   <span className="block text-[11px] text-rose-600 font-bold mt-1">
-                    ⚠️ Se eliminarán también todas sus visitas y cotizaciones registradas.
+                    ⚠️ Se eliminarán de Supabase sus visitas y ventas ligadas automáticamente.
                   </span>
                 )}
               </p>

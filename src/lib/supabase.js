@@ -196,11 +196,9 @@ async function base64AArchivo(base64Data, nombreArchivo) {
   return new File([blob], nombreArchivo, { type: 'image/jpeg' });
 }
 
-// Subida a Storage con soporte Offline
 export async function subirArchivoSupabase(file, folder = 'fotos') {
   const archivoAEnviar = await comprimirImagen(file);
 
-  // Si estamos sin conexión o no hay supabase, generar Base64 para visualización offline
   if (!navigator.onLine || !supabase) {
     return await convertirArchivoABase64(archivoAEnviar);
   }
@@ -217,7 +215,7 @@ export async function subirArchivoSupabase(file, folder = 'fotos') {
       });
 
     if (uploadError) {
-      console.warn('Fallo al subir a Storage, guardando en Base64 local:', uploadError);
+      console.warn('Fallo subiendo foto a Storage, guardando local:', uploadError);
       return await convertirArchivoABase64(archivoAEnviar);
     }
 
@@ -229,7 +227,7 @@ export async function subirArchivoSupabase(file, folder = 'fotos') {
 }
 
 // ==========================================
-// CRUD CLIENTES (CON SOPORTE OFFLINE)
+// CRUD CLIENTES
 // ==========================================
 export async function obtenerClientesDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -258,53 +256,57 @@ export async function obtenerClientesDB() {
 
 export async function guardarClienteDB(cliente) {
   const fila = {
-    id: cliente.id,
-    sucursal: cliente.sucursal,
-    id_red_azul: cliente.idRedAzul || null,
-    nombre_cliente: cliente.nombreCliente,
-    tipo_cliente: cliente.tipoCliente,
-    tipo_mercado: cliente.tipoMercado || null,
-    responsable: cliente.responsable,
-    contacto: cliente.contacto || null,
-    correo: cliente.correo || null,
-    direccion: cliente.direccion || null,
-    lat: cliente.lat || null,
-    lng: cliente.lng || null,
+    id: String(cliente.id).trim().toUpperCase(),
+    sucursal: String(cliente.sucursal || 'ALTOZANO').trim().toUpperCase(),
+    id_red_azul: cliente.idRedAzul ? String(cliente.idRedAzul).trim().toUpperCase() : null,
+    nombre_cliente: String(cliente.nombreCliente || '').trim().toUpperCase(),
+    tipo_cliente: String(cliente.tipoCliente || 'PROSPECTO').trim().toUpperCase(),
+    tipo_mercado: cliente.tipoMercado ? String(cliente.tipoMercado).trim().toUpperCase() : null,
+    responsable: String(cliente.responsable || '').trim().toUpperCase(),
+    contacto: cliente.contacto ? String(cliente.contacto).trim() : null,
+    correo: cliente.correo ? String(cliente.correo).trim().toLowerCase() : null,
+    direccion: cliente.direccion ? String(cliente.direccion).trim().toUpperCase() : null,
+    lat: (cliente.lat !== null && cliente.lat !== undefined && !isNaN(Number(cliente.lat))) ? Number(cliente.lat) : null,
+    lng: (cliente.lng !== null && cliente.lng !== undefined && !isNaN(Number(cliente.lng))) ? Number(cliente.lng) : null,
     ubicacion: cliente.ubicacion || null
   };
 
   if (!navigator.onLine || !supabase) {
-    await encolarAccionOffline({ id: `cli_${cliente.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
+    await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
     return;
   }
 
   try {
     const { error } = await supabase.from('clientes').upsert(fila);
     if (error) {
-      await encolarAccionOffline({ id: `cli_${cliente.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
+      console.error('Error guardando cliente en Supabase:', error);
+      await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
+    } else {
+      console.log('✅ Cliente guardado en Supabase:', fila.id);
     }
-  } catch {
-    await encolarAccionOffline({ id: `cli_${cliente.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
+  } catch (err) {
+    await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
   }
 }
 
 export async function eliminarClienteDB(id) {
+  const idLimpio = String(id).trim().toUpperCase();
   if (!supabase || !navigator.onLine) {
-    await encolarAccionOffline({ id: `del_cli_${id}_${Date.now()}`, tabla: 'clientes_delete', datos: { id } });
+    await encolarAccionOffline({ id: `del_cli_${idLimpio}_${Date.now()}`, tabla: 'clientes_delete', datos: { id: idLimpio } });
     return;
   }
   try {
-    const { error } = await supabase.from('clientes').delete().eq('id', id);
+    const { error } = await supabase.from('clientes').delete().eq('id', idLimpio);
     if (error) {
-      await encolarAccionOffline({ id: `del_cli_${id}_${Date.now()}`, tabla: 'clientes_delete', datos: { id } });
+      await encolarAccionOffline({ id: `del_cli_${idLimpio}_${Date.now()}`, tabla: 'clientes_delete', datos: { id: idLimpio } });
     }
   } catch {
-    await encolarAccionOffline({ id: `del_cli_${id}_${Date.now()}`, tabla: 'clientes_delete', datos: { id } });
+    await encolarAccionOffline({ id: `del_cli_${idLimpio}_${Date.now()}`, tabla: 'clientes_delete', datos: { id: idLimpio } });
   }
 }
 
 // ==========================================
-// CRUD OBRAS (CON SOPORTE OFFLINE)
+// CRUD OBRAS (CON AUTO-RECUPERACIÓN DE CLIENTE)
 // ==========================================
 export async function obtenerObrasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -335,50 +337,72 @@ export async function obtenerObrasDB() {
 
 export async function guardarObraDB(obra) {
   const fila = {
-    id: obra.id,
-    nombre: obra.nombre,
-    sucursal: obra.sucursal,
-    cliente_id: obra.clienteId || null,
-    tipo_desarrollo: obra.tipoDesarrollo || 'OBRA NUEVA',
-    estatus_fase: obra.estatusFase || 'CIMENTACIÓN',
-    estado_obra: obra.estadoObra || 'ACTIVA',
-    direccion: obra.direccion || null,
-    lat: obra.lat || null,
-    lng: obra.lng || null
+    id: String(obra.id).trim().toUpperCase(),
+    nombre: String(obra.nombre || '').trim().toUpperCase(),
+    sucursal: String(obra.sucursal || 'ALTOZANO').trim().toUpperCase(),
+    cliente_id: (obra.clienteId && String(obra.clienteId).trim() !== '' && obra.clienteId !== 'SIN_CLIENTE') 
+      ? String(obra.clienteId).trim().toUpperCase() 
+      : null,
+    tipo_desarrollo: String(obra.tipoDesarrollo || 'OBRA NUEVA').trim().toUpperCase(),
+    estatus_fase: String(obra.estatusFase || 'CIMENTACIÓN').trim().toUpperCase(),
+    estado_obra: String(obra.estadoObra || 'ACTIVA').trim().toUpperCase(),
+    direccion: obra.direccion ? String(obra.direccion).trim().toUpperCase() : null,
+    lat: (obra.lat !== null && obra.lat !== undefined && !isNaN(Number(obra.lat))) ? Number(obra.lat) : null,
+    lng: (obra.lng !== null && obra.lng !== undefined && !isNaN(Number(obra.lng))) ? Number(obra.lng) : null
   };
 
   if (!navigator.onLine || !supabase) {
-    await encolarAccionOffline({ id: `obr_${obra.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+    await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
     return;
   }
 
   try {
     const { error } = await supabase.from('obras').upsert(fila);
     if (error) {
-      await encolarAccionOffline({ id: `obr_${obra.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+      console.warn('Aviso Supabase al guardar obra:', error.message);
+      // Si falló por la llave foránea de cliente_id, guardamos la obra sin cliente para que NUNCA se pierda
+      if (error.message && error.message.includes('cliente_id')) {
+        fila.cliente_id = null;
+        await supabase.from('obras').upsert(fila);
+        console.log('✅ Obra guardada en Supabase (modo seguro sin cliente):', fila.id);
+      } else {
+        await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+      }
+    } else {
+      console.log('✅ Obra guardada con éxito en Supabase:', fila.id);
     }
-  } catch {
-    await encolarAccionOffline({ id: `obr_${obra.id}_${Date.now()}`, tabla: 'obras', datos: fila });
+  } catch (err) {
+    await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
   }
 }
 
+// ELIMINACIÓN EN CASCADA COMPLETA EN SUPABASE
 export async function eliminarObraDB(id) {
+  const idLimpio = String(id).trim().toUpperCase();
   if (!supabase || !navigator.onLine) {
-    await encolarAccionOffline({ id: `del_obr_${id}_${Date.now()}`, tabla: 'obras_delete', datos: { id } });
+    await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
     return;
   }
   try {
-    const { error } = await supabase.from('obras').delete().eq('id', id);
+    // 1. Eliminar movimientos comerciales asociados
+    await supabase.from('movimientos_comerciales').delete().eq('obra_id', idLimpio);
+    // 2. Eliminar visitas asociadas
+    await supabase.from('visitas').delete().eq('obra_id', idLimpio);
+    // 3. Eliminar la obra
+    const { error } = await supabase.from('obras').delete().eq('id', idLimpio);
     if (error) {
-      await encolarAccionOffline({ id: `del_obr_${id}_${Date.now()}`, tabla: 'obras_delete', datos: { id } });
+      console.error('Error eliminando obra:', error);
+      await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
+    } else {
+      console.log('✅ Obra, visitas y ventas eliminadas en cascada de Supabase:', idLimpio);
     }
-  } catch {
-    await encolarAccionOffline({ id: `del_obr_${id}_${Date.now()}`, tabla: 'obras_delete', datos: { id } });
+  } catch (err) {
+    await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
   }
 }
 
 // ==========================================
-// CRUD VISITAS (CON SOPORTE OFFLINE)
+// CRUD VISITAS
 // ==========================================
 export async function obtenerVisitasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -407,38 +431,41 @@ export async function obtenerVisitasDB() {
 
 export async function guardarVisitaDB(visita) {
   const fila = {
-    id: visita.id,
-    obra_id: visita.obraId,
-    sucursal: visita.sucursal,
-    fecha: visita.fecha,
-    asesor_nombre: visita.asesorNombre,
-    estatus: visita.estatus,
-    actividad: visita.actividad,
-    observaciones: visita.observaciones || null,
-    fotos: visita.fotos || [],
-    lat_gps_real: visita.latGpsReal || null,
-    lng_gps_real: visita.lngGpsReal || null,
-    distancia_auditoria_metros: visita.distanciaAuditoriaMetros || 0,
-    auditoria_estado: visita.auditoriaEstado || 'remoto'
+    id: String(visita.id).trim().toUpperCase(),
+    obra_id: String(visita.obraId).trim().toUpperCase(),
+    sucursal: String(visita.sucursal || 'ALTOZANO').trim().toUpperCase(),
+    fecha: String(visita.fecha || '').trim(),
+    asesor_nombre: String(visita.asesorNombre || 'ASESOR').trim().toUpperCase(),
+    estatus: String(visita.estatus || 'CIMENTACIÓN').trim().toUpperCase(),
+    actividad: String(visita.actividad || 'SUPERVISIÓN TÉCNICA').trim().toUpperCase(),
+    observaciones: visita.observaciones ? String(visita.observaciones).trim().toUpperCase() : null,
+    fotos: Array.isArray(visita.fotos) ? visita.fotos : [],
+    lat_gps_real: (visita.latGpsReal !== null && visita.latGpsReal !== undefined && !isNaN(Number(visita.latGpsReal))) ? Number(visita.latGpsReal) : null,
+    lng_gps_real: (visita.lngGpsReal !== null && visita.lngGpsReal !== undefined && !isNaN(Number(visita.lngGpsReal))) ? Number(visita.lngGpsReal) : null,
+    distancia_auditoria_metros: Number(visita.distanciaAuditoriaMetros) || 0,
+    auditoria_estado: String(visita.auditoriaEstado || 'remoto').toLowerCase()
   };
 
   if (!navigator.onLine || !supabase) {
-    await encolarAccionOffline({ id: `vis_${visita.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+    await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
     return;
   }
 
   try {
     const { error } = await supabase.from('visitas').upsert(fila);
     if (error) {
-      await encolarAccionOffline({ id: `vis_${visita.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+      console.error('Error guardando visita en Supabase:', error);
+      await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+    } else {
+      console.log('✅ Visita guardada con éxito en Supabase:', fila.id);
     }
-  } catch {
-    await encolarAccionOffline({ id: `vis_${visita.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
+  } catch (err) {
+    await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
   }
 }
 
 // ==========================================
-// CRUD MOVIMIENTOS COMERCIALES (CON SOPORTE OFFLINE)
+// CRUD MOVIMIENTOS COMERCIALES
 // ==========================================
 export async function obtenerMovimientosDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -471,42 +498,44 @@ export async function obtenerMovimientosDB() {
 
 export async function guardarMovimientoDB(mov) {
   const fila = {
-    id: mov.id,
-    obra_id: mov.obraId,
-    tipo: mov.tipo,
-    comprobante: mov.comprobante || (mov.tipo === 'VENTA' ? 'REMISIÓN' : 'COTIZACIÓN'),
-    folio: mov.folio,
+    id: String(mov.id).trim().toUpperCase(),
+    obra_id: String(mov.obraId).trim().toUpperCase(),
+    tipo: String(mov.tipo || 'COTIZACION').trim().toUpperCase(),
+    comprobante: String(mov.comprobante || (mov.tipo === 'VENTA' ? 'REMISIÓN' : 'COTIZACIÓN')).trim().toUpperCase(),
+    folio: String(mov.folio || '').trim().toUpperCase(),
     monto: Number(mov.monto) || 0,
-    estatus: mov.estatus || 'PENDIENTE',
-    forma_pago: mov.formaPago || 'N/A',
-    tipo_entrega: mov.tipoEntrega || 'DOMICILIO',
-    fecha: mov.fecha,
+    estatus: String(mov.estatus || 'PENDIENTE').trim().toUpperCase(),
+    forma_pago: String(mov.formaPago || 'N/A').trim().toUpperCase(),
+    tipo_entrega: String(mov.tipoEntrega || 'DOMICILIO').trim().toUpperCase(),
+    fecha: String(mov.fecha || '').trim(),
     documento_adjunto: mov.documentoAdjunto || null,
-    observaciones: mov.observaciones || null,
-    cotizacion_origen_id: mov.cotizacionOrigenId || null
+    observaciones: mov.observaciones ? String(mov.observaciones).trim().toUpperCase() : null,
+    cotizacion_origen_id: mov.cotizacionOrigenId ? String(mov.cotizacionOrigenId).trim().toUpperCase() : null
   };
 
   if (!navigator.onLine || !supabase) {
-    await encolarAccionOffline({ id: `mov_${mov.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
+    await encolarAccionOffline({ id: `mov_${fila.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
     return;
   }
 
   try {
     const { error } = await supabase.from('movimientos_comerciales').upsert(fila);
     if (error) {
-      await encolarAccionOffline({ id: `mov_${mov.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
+      console.error('Error guardando venta/cotización en Supabase:', error);
+      await encolarAccionOffline({ id: `mov_${fila.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
+    } else {
+      console.log('✅ Movimiento comercial guardado en Supabase:', fila.id);
     }
-  } catch {
-    await encolarAccionOffline({ id: `mov_${mov.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
+  } catch (err) {
+    await encolarAccionOffline({ id: `mov_${fila.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
   }
 }
 
 // ==========================================
-// SINCRONIZADOR DE LA COLA OFFLINE AL VOLVER A TENER SEÑAL
+// SINCRONIZADOR DE COLA OFFLINE
 // ==========================================
 export async function sincronizarColaOffline() {
   if (!navigator.onLine || !supabase) return 0;
-  
   const pendientes = await obtenerItemsColaOffline();
   if (!pendientes.length) return 0;
 
@@ -521,6 +550,8 @@ export async function sincronizarColaOffline() {
           sincronizados++;
         }
       } else if (item.tabla === 'obras_delete') {
+        await supabase.from('movimientos_comerciales').delete().eq('obra_id', item.datos.id);
+        await supabase.from('visitas').delete().eq('obra_id', item.datos.id);
         const { error } = await supabase.from('obras').delete().eq('id', item.datos.id);
         if (!error) {
           await eliminarItemColaOffline(item.id);
@@ -577,9 +608,6 @@ export async function sincronizarColaOffline() {
   return sincronizados;
 }
 
-// ==========================================
-// SUSCRIPCIÓN EN VIVO (SIN F5)
-// ==========================================
 export function suscribirCambiosGlobales(callback) {
   if (!supabase) return () => {};
   const canal = supabase
