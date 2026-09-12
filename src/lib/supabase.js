@@ -227,7 +227,7 @@ export async function subirArchivoSupabase(file, folder = 'fotos') {
 }
 
 // =========================================================================
-// AUTO-ADAPTADOR INTELIGENTE RESILIENTE (RESUELVE CUALQUIER ERROR DE SCHEMA)
+// AUTO-ADAPTADOR INTELIGENTE RESILIENTE
 // =========================================================================
 async function ejecutarUpsertSeguro(tabla, filaOriginal) {
   if (!supabase) return { ok: false, error: 'No supabase' };
@@ -238,40 +238,33 @@ async function ejecutarUpsertSeguro(tabla, filaOriginal) {
     intentos++;
     const { error } = await supabase.from(tabla).upsert(fila);
     if (!error) {
-      console.log(`✅ Guardado exitoso en ${tabla}:`, fila.id);
       return { ok: true };
     }
 
-    console.warn(`Intento ${intentos} en ${tabla} reportó:`, error.message);
-
-    // 1. Si falla porque una columna no existe en Supabase (ej: 'proyecto' en 'obras')
+    // 1. Quitar columna si no existe en Supabase
     const matchColumnaInexistente = error.message.match(/could not find the '([^']+)' column/i) 
       || error.message.match(/column "([^"]+)" of relation "[^"]+" does not exist/i);
     
     if (matchColumnaInexistente) {
       const colABorrar = matchColumnaInexistente[1];
-      console.warn(`Auto-reparación: quitando columna inexistente '${colABorrar}' de ${tabla}...`);
       delete fila[colABorrar];
       continue;
     }
 
-    // 2. Si falla porque una columna en Supabase es NOT NULL y venía vacía (ej: 'tipo_desarrollo')
+    // 2. Rellenar columna si es obligatoria NOT NULL
     const matchColumnaNotNull = error.message.match(/null value in column "([^"]+)"/i);
     if (matchColumnaNotNull) {
       const colFaltante = matchColumnaNotNull[1];
-      console.warn(`Auto-reparación: rellenando columna obligatoria '${colFaltante}' en ${tabla}...`);
       fila[colFaltante] = colFaltante.includes('id') ? 'SIN_ID' : 'OBRA NUEVA';
       continue;
     }
 
-    // 3. Si falla por cliente_id llave foránea
+    // 3. Desvincular cliente_id si falla llave foránea
     if (error.message.includes('cliente_id') || error.code === '23503') {
-      console.warn(`Auto-reparación: desvinculando cliente_id para guardar obra sin conflicto...`);
       fila.cliente_id = null;
       continue;
     }
 
-    // Si es un error desconocido
     alert(`⚠️ Error guardando en ${tabla}: ${error.message}`);
     return { ok: false, error };
   }
@@ -385,7 +378,7 @@ export async function obtenerObrasDB() {
 export async function guardarObraDB(obra) {
   const fila = {
     id: String(obra.id).trim().toUpperCase(),
-    nombre: String(obra.nombre || '').trim().toUpperCase(), // Solo nombre, sin 'proyecto'
+    nombre: String(obra.nombre || '').trim().toUpperCase(),
     sucursal: String(obra.sucursal || 'ALTOZANO').trim().toUpperCase(),
     cliente_id: (obra.clienteId && String(obra.clienteId).trim() !== '' && obra.clienteId !== 'SIN_CLIENTE') 
       ? String(obra.clienteId).trim().toUpperCase() 
@@ -463,7 +456,7 @@ export async function guardarVisitaDB(visita) {
     id: String(visita.id).trim().toUpperCase(),
     obra_id: String(visita.obraId).trim().toUpperCase(),
     proyecto: nombreProyecto,
-    tipo_desarrollo: String(visita.tipoDesarrollo || 'OBRA NUEVA').trim().toUpperCase(), // Satisface la columna requerida
+    tipo_desarrollo: String(visita.tipoDesarrollo || 'OBRA NUEVA').trim().toUpperCase(),
     sucursal: String(visita.sucursal || 'ALTOZANO').trim().toUpperCase(),
     fecha: String(visita.fecha || '').trim(),
     asesor_nombre: String(visita.asesorNombre || 'ASESOR').trim().toUpperCase(),
@@ -568,6 +561,53 @@ export async function guardarMovimientoDB(mov) {
 }
 
 // ==========================================
+// RASTREO SATELITAL Y FLOTA EN VIVO
+// ==========================================
+export async function transmitirPosicionDB({ usuarioId, nombre, sucursal, lat, lng, accuracy }) {
+  if (!supabase || !usuarioId || !navigator.onLine) return;
+  try {
+    await supabase.from('posiciones_en_vivo').upsert({
+      usuario_id: usuarioId,
+      nombre,
+      sucursal,
+      lat: Number(lat),
+      lng: Number(lng),
+      accuracy: Number(accuracy) || 10,
+      updated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('Fallo transmitiendo ubicación:', err);
+  }
+}
+
+export async function obtenerPosicionesEnVivoDB() {
+  if (!supabase || !navigator.onLine) return [];
+  try {
+    const { data, error } = await supabase.from('posiciones_en_vivo').select('*');
+    if (error) {
+      console.error('Error leyendo flota en vivo:', error);
+      return [];
+    }
+    return data || [];
+  } catch {
+    return [];
+  }
+}
+
+export function suscribirPosicionesEnVivo(onUpdate) {
+  if (!supabase) return () => {};
+  const canal = supabase
+    .channel('rastreo-flota-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'posiciones_en_vivo' }, async () => {
+      const flotaActualizada = await obtenerPosicionesEnVivoDB();
+      onUpdate(flotaActualizada);
+    })
+    .subscribe();
+
+  return () => supabase.removeChannel(canal);
+}
+
+// ==========================================
 // SINCRONIZADOR DE COLA OFFLINE
 // ==========================================
 export async function sincronizarColaOffline() {
@@ -658,43 +698,6 @@ export function suscribirCambiosGlobales(callback) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => callback('clientes'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'visitas' }, () => callback('visitas'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos_comerciales' }, () => callback('movimientos'))
-    .subscribe();
-
-  return () => supabase.removeChannel(canal);
-}
-
-export async function transmitirPosicionDB({ usuarioId, nombre, sucursal, lat, lng, accuracy }) {
-  if (!supabase || !usuarioId || !navigator.onLine) return;
-  try {
-    await supabase.from('posiciones_en_vivo').upsert({
-      usuario_id: usuarioId,
-      nombre,
-      sucursal,
-      lat,
-      lng,
-      accuracy,
-      updated_at: new Date().toISOString()
-    });
-  } catch {}
-}
-
-export async function obtenerPosicionesEnVivoDB() {
-  if (!supabase || !navigator.onLine) return [];
-  try {
-    const { data } = await supabase.from('posiciones_en_vivo').select('*');
-    return data || [];
-  } catch {
-    return [];
-  }
-}
-
-export function suscribirPosicionesEnVivo(onUpdate) {
-  if (!supabase) return () => {};
-  const canal = supabase
-    .channel('rastreo-flota-realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'posiciones_en_vivo' }, () => {
-      obtenerPosicionesEnVivoDB().then(onUpdate);
-    })
     .subscribe();
 
   return () => supabase.removeChannel(canal);
