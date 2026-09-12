@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Search, SlidersHorizontal, User, ChevronRight,
   Pencil, Trash2, Building2, Snowflake, Clock, X,
-  Camera, MapPin, ArrowDownUp
+  Camera, MapPin, ArrowDownUp, Navigation, Sparkles
 } from 'lucide-react';
 import { SUCURSALES, FASES_OBRA, FASE_COLORS } from '../data/constants';
 
@@ -123,11 +123,13 @@ export default function PipelineTab({
         return true;
       })
       .filter(o => {
-        const q = search.toLowerCase();
+        const q = search.toLowerCase().trim();
+        if (!q) return true;
         return (
           o.nombre.toLowerCase().includes(q) ||
           o.id.toLowerCase().includes(q) ||
-          (o.cliente?.nombreCliente && o.cliente.nombreCliente.toLowerCase().includes(q))
+          (o.cliente?.nombreCliente && o.cliente.nombreCliente.toLowerCase().includes(q)) ||
+          (o.direccion && o.direccion.toLowerCase().includes(q))
         );
       });
 
@@ -150,98 +152,95 @@ export default function PipelineTab({
                              (filtroEstadoObra !== 'ACTIVA' ? 1 : 0);
 
   return (
-    <div className="space-y-3 pb-28">
+    <div className="space-y-3.5 pb-28">
       
-      {/* Barra de Búsqueda y Filtros con Elevación */}
-      <div className="flex items-center gap-2">
+      {/* Barra de Búsqueda y Filtros con Ergonomía Nativa Android */}
+      <div className="flex items-center gap-2.5">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+          <Search className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
           <input 
             type="text"
             placeholder="Buscar por obra, folio o cliente..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10.5 pl-10 pr-3 rounded-2xl border border-slate-200/80 bg-white text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0091FB] focus:ring-2 focus:ring-[#0091FB]/10 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition-all"
+            className="w-full h-11 pl-11 pr-4 rounded-2xl border border-slate-300/80 bg-white text-xs sm:text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0091FB] focus:ring-2 focus:ring-[#0091FB]/15 shadow-sm transition-all"
           />
         </div>
 
         <button
           type="button"
           onClick={() => setModalFiltrosAbierto(true)}
-          className={`h-10.5 px-3.5 rounded-2xl text-xs font-black flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.03)] ${
+          className={`min-h-[44px] px-4 rounded-2xl text-xs sm:text-sm font-black flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 shadow-sm ${
             filtrosActivosCount > 0 
               ? 'bg-[#001757] text-white border-[#001757]' 
-              : 'bg-white text-[#001757] border-slate-200/80 hover:bg-slate-50'
+              : 'bg-white text-[#001757] border-slate-300/80 hover:bg-slate-50'
           }`}>
-          <SlidersHorizontal className="w-3.5 h-3.5 stroke-[2.5]" />
+          <SlidersHorizontal className="w-4 h-4 stroke-[2.5]" />
           <span>Filtros</span>
           {filtrosActivosCount > 0 && (
-            <span className="w-4 h-4 rounded-full bg-[#0091FB] text-white text-[9px] font-black flex items-center justify-center">
+            <span className="w-4 h-4 rounded-full bg-[#0091FB] text-white text-[10px] font-black flex items-center justify-center">
               {filtrosActivosCount}
             </span>
           )}
         </button>
       </div>
 
-      {/* Chips Rápidos de Ordenamiento Táctil */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0 mr-0.5">
-          <ArrowDownUp className="w-3 h-3" />
-        </span>
-
+      {/* Selectores de Ordenamiento Táctil de Acceso Rápido */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         <button
           type="button"
           onClick={() => setCriterioOrden('CERCANIA')}
-          className={`px-3 py-1.5 rounded-xl font-black text-[11px] whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
+          className={`min-h-[38px] px-3.5 py-1.5 rounded-xl font-black text-xs whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
             criterioOrden === 'CERCANIA'
-              ? 'bg-[#001757] text-white shadow-sm shadow-[#001757]/20 scale-102'
-              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
+              ? 'bg-[#001757] text-white shadow-md shadow-[#001757]/20 scale-102'
+              : 'bg-white text-slate-600 border border-slate-300/80 hover:bg-slate-50'
           }`}>
-          <MapPin className="w-3 h-3 text-[#0091FB]" />
+          <MapPin className="w-3.5 h-3.5 text-[#0091FB]" />
           <span>Más Cercanas</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCriterioOrden('DIAS_SIN_VISITA')}
-          className={`px-3 py-1.5 rounded-xl font-black text-[11px] whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
+          className={`min-h-[38px] px-3.5 py-1.5 rounded-xl font-black text-xs whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
             criterioOrden === 'DIAS_SIN_VISITA'
-              ? 'bg-rose-600 text-white shadow-sm shadow-rose-600/20 scale-102'
-              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
+              ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20 scale-102'
+              : 'bg-white text-slate-600 border border-slate-300/80 hover:bg-slate-50'
           }`}>
-          <Snowflake className="w-3 h-3 text-rose-300" />
-          <span>Más Frías</span>
+          <Snowflake className="w-3.5 h-3.5 text-rose-300" />
+          <span>Frías (&gt;12d)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCriterioOrden('RECIENTES')}
-          className={`px-3 py-1.5 rounded-xl font-black text-[11px] whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
+          className={`min-h-[38px] px-3.5 py-1.5 rounded-xl font-black text-xs whitespace-nowrap transition-all duration-150 flex items-center gap-1.5 ${
             criterioOrden === 'RECIENTES'
-              ? 'bg-[#001757] text-white shadow-sm shadow-[#001757]/20 scale-102'
-              : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
+              ? 'bg-[#001757] text-white shadow-md shadow-[#001757]/20 scale-102'
+              : 'bg-white text-slate-600 border border-slate-300/80 hover:bg-slate-50'
           }`}>
-          <Clock className="w-3 h-3 text-slate-400" />
+          <Clock className="w-3.5 h-3.5 text-slate-400" />
           <span>Recientes</span>
         </button>
       </div>
 
-      <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400">
-        <span>{obrasFiltradas.length} obras {filtroEstadoObra === 'ACTIVA' ? 'en proceso' : filtroEstadoObra === 'PAUSADA' ? 'pausadas' : filtroEstadoObra === 'TERMINADA' ? 'concluidas' : 'totales'}</span>
+      {/* Contador de obras filtradas */}
+      <div className="flex items-center justify-between px-1 text-[11px] sm:text-xs font-extrabold text-slate-500">
+        <span>{obrasFiltradas.length} obras {filtroEstadoObra === 'ACTIVA' ? 'activas' : filtroEstadoObra === 'PAUSADA' ? 'pausadas' : filtroEstadoObra === 'TERMINADA' ? 'concluidas' : 'en total'}</span>
         {filtroSucursal !== 'TODAS' && (
-          <span className="font-extrabold text-[#001757] bg-blue-50/80 border border-blue-200/60 px-2 py-0.5 rounded-md">
+          <span className="font-black text-[#001757] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
             {filtroSucursal}
           </span>
         )}
       </div>
 
-      {/* Grid de Tarjetas Estilo Silicon Valley */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+      {/* Cuadrícula Adaptativa Tablet: 1 columna en móvil vertical, 2 columnas en Tablet horizontal */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {obrasFiltradas.length === 0 ? (
-          <div className="col-span-full p-10 text-center bg-white rounded-3xl border border-slate-200/70 shadow-sm space-y-2">
-            <Building2 className="w-9 h-9 text-slate-300 mx-auto" />
-            <h4 className="text-xs font-black text-slate-800">No hay obras registradas</h4>
-            <p className="text-[11px] text-slate-400">Prueba cambiando tus filtros de estado o fase.</p>
+          <div className="col-span-full p-10 text-center bg-white rounded-3xl border border-slate-200/80 shadow-sm space-y-2">
+            <Building2 className="w-10 h-10 text-slate-300 mx-auto" />
+            <h4 className="text-sm font-black text-slate-800">No encontramos obras con esos filtros</h4>
+            <p className="text-xs text-slate-400">Prueba cambiando la búsqueda o los filtros seleccionados.</p>
           </div>
         ) : (
           obrasFiltradas.map(obra => {
@@ -252,74 +251,76 @@ export default function PipelineTab({
               <div
                 key={obra.id}
                 onClick={() => onSeleccionarObra(obra)}
-                className="w-full bg-white hover:border-[#0091FB]/60 active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/70 px-4 py-3.5 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.04)] hover:shadow-md transition-all duration-200 space-y-2.5">
+                className="w-full bg-white hover:border-[#0091FB] active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md transition-all duration-150 space-y-3">
                 
-                {/* Línea 1: Folio + Nombre + Distancia + Fase */}
+                {/* Cabecera de la Tarjeta: Folio, Título, Distancia y Fase */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex items-center gap-2">
-                    <span className="font-mono font-black text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md text-[10px] shrink-0 border border-slate-200/50">
+                    <span className="font-mono font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-[11px] shrink-0 border border-slate-200">
                       {obra.id}
                     </span>
-                    <h3 className="text-sm font-black text-[#001757] tracking-tight truncate leading-snug">
+                    <h3 className="text-sm sm:text-base font-black text-[#001757] tracking-tight truncate leading-snug">
                       {obra.nombre}
                     </h3>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
                     {distanciaTexto && (
-                      <span className="text-[9px] font-black bg-blue-50/90 text-[#0091FB] border border-blue-200/60 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs">
-                        <MapPin className="w-2.5 h-2.5 text-rose-500" />
+                      <span className="text-[10px] font-black bg-blue-50 text-[#0091FB] border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                        <MapPin className="w-3 h-3 text-rose-500" />
                         {distanciaTexto}
                       </span>
                     )}
 
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider ${FASE_COLORS[obra.estatusFase]}`}>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${FASE_COLORS[obra.estatusFase]}`}>
                       {obra.estatusFase}
                     </span>
 
                     {obra.estadoObra === 'PAUSADA' ? (
-                      <span className="text-[9px] font-black bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">Pausada</span>
+                      <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded">Pausada</span>
                     ) : obra.estadoObra === 'TERMINADA' ? (
-                      <span className="text-[9px] font-black bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">Concluida</span>
+                      <span className="text-[10px] font-black bg-slate-100 text-slate-700 px-2 py-0.5 rounded">Concluida</span>
                     ) : obra.diasSinVisita === 0 ? (
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]" title="Visitada Hoy" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" title="Visitada Hoy" />
                     ) : esFria ? (
-                      <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]" title={`Hace ${obra.diasSinVisita} días`} />
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)]" title={`Hace ${obra.diasSinVisita} días`} />
                     ) : null}
                   </div>
                 </div>
 
-                {/* Línea 2: Cliente y Tiempo sin Visita */}
+                {/* Cliente y Días sin Visita */}
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                  <p className="truncate font-bold flex items-center gap-1 text-[11px]">
-                    <User className="w-3 h-3 text-[#0091FB] shrink-0" />
+                  <p className="truncate font-bold flex items-center gap-1.5 text-xs text-slate-700">
+                    <User className="w-3.5 h-3.5 text-[#0091FB] shrink-0" />
                     <span className="truncate">{obra.cliente ? obra.cliente.nombreCliente : 'Sin cliente asignado'}</span>
                   </p>
 
-                  <span className="text-[10px] text-slate-400 font-semibold shrink-0">
-                    {obra.diasSinVisita === 0 ? 'Hoy' : `Hace ${obra.diasSinVisita}d`} • {obra.sucursal}
+                  <span className="text-[11px] text-slate-500 font-bold shrink-0">
+                    {obra.diasSinVisita === 0 ? 'Visitada hoy' : `Hace ${obra.diasSinVisita}d`} • {obra.sucursal}
                   </span>
                 </div>
 
-                {/* Línea 3: Balance Comercial + Botón Check-in Rápido */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-3 text-xs">
+                {/* Balance Comercial y Botones de Acción Inmediata (Ergonomía Nativa) */}
+                <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                  
+                  <div className="flex items-center gap-3">
                     <div>
-                      <span className="text-[9px] uppercase font-black text-slate-400 block leading-none">Cotizado</span>
-                      <strong className="text-xs font-black text-[#001757] leading-tight block mt-0.5">
+                      <span className="text-[10px] uppercase font-black text-slate-400 block leading-none">Cotizado</span>
+                      <strong className="text-xs sm:text-sm font-black text-[#001757] leading-tight block mt-0.5">
                         {formatearMoneda(obra.cotizado)}
                       </strong>
                     </div>
 
-                    <div className="border-l border-slate-200/80 pl-3">
-                      <span className="text-[9px] uppercase font-black text-slate-400 block leading-none">Vendido</span>
-                      <strong className="text-xs font-black text-emerald-600 leading-tight block mt-0.5">
+                    <div className="border-l border-slate-200 pl-3">
+                      <span className="text-[10px] uppercase font-black text-slate-400 block leading-none">Vendido</span>
+                      <strong className="text-xs sm:text-sm font-black text-emerald-600 leading-tight block mt-0.5">
                         {formatearMoneda(obra.vendido)}
                       </strong>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
+                  {/* Acciones de 1 toque: Check-in + Editar + Abrir */}
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {onNuevaVisita && obra.estadoObra !== 'TERMINADA' && (
                       <button
                         type="button"
@@ -327,9 +328,9 @@ export default function PipelineTab({
                           e.stopPropagation();
                           onNuevaVisita(obra);
                         }}
-                        className="h-7.5 px-2.5 bg-gradient-to-r from-[#0091FB] to-[#007be0] hover:brightness-105 active:scale-95 text-white font-black text-[11px] rounded-xl flex items-center gap-1 shadow-xs shadow-[#0091FB]/25 transition-all"
+                        className="min-h-[38px] px-3 bg-gradient-to-r from-[#0091FB] to-[#007be0] hover:brightness-105 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm shadow-[#0091FB]/30 transition-all"
                         title="Check-in Inmediato">
-                        <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <Camera className="w-4 h-4 stroke-[2.4]" />
                         <span>Check-in</span>
                       </button>
                     )}
@@ -340,9 +341,9 @@ export default function PipelineTab({
                         e.stopPropagation();
                         onEditarObra(obra);
                       }}
-                      className="w-7.5 h-7.5 rounded-xl text-slate-400 hover:text-[#0091FB] hover:bg-blue-50 flex items-center justify-center transition-colors"
-                      title="Editar">
-                      <Pencil className="w-3.5 h-3.5" />
+                      className="w-9 h-9 rounded-xl text-slate-400 hover:text-[#0091FB] hover:bg-blue-50 flex items-center justify-center transition-colors active:scale-90"
+                      title="Editar Obra">
+                      <Pencil className="w-4 h-4" />
                     </button>
 
                     <button
@@ -351,13 +352,13 @@ export default function PipelineTab({
                         e.stopPropagation();
                         onEliminarObra(obra);
                       }}
-                      className="w-7.5 h-7.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors"
-                      title="Borrar">
-                      <Trash2 className="w-3.5 h-3.5" />
+                      className="w-9 h-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors active:scale-90"
+                      title="Borrar Obra">
+                      <Trash2 className="w-4 h-4" />
                     </button>
 
-                    <span className="text-[#0091FB] pl-0.5 font-bold">
-                      <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                    <span className="text-[#0091FB] pl-1 font-bold">
+                      <ChevronRight className="w-5 h-5 stroke-[2.5]" />
                     </span>
                   </div>
                 </div>
@@ -368,25 +369,28 @@ export default function PipelineTab({
         )}
       </div>
 
-      {/* Modal de Filtros */}
+      {/* Modal de Filtros con Estilo Bottom Sheet */}
       {modalFiltrosAbierto && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-          <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto border border-slate-100">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="w-full sm:max-w-md bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto border border-slate-200">
             
+            {/* Tirador táctil estilo Bottom Sheet */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden" />
+
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
                 <h3 className="text-base font-black text-[#001757]">Filtros de Obras</h3>
-                <p className="text-xs text-slate-400 font-medium">Personaliza tu vista en campo</p>
+                <p className="text-xs text-slate-400 font-medium">Personaliza tu terminal de campo</p>
               </div>
               <button
                 type="button"
                 onClick={() => setModalFiltrosAbierto(false)}
-                className="w-9 h-9 rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center">
+                className="w-9 h-9 rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center active:scale-90">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">Estado de la Obra</label>
               <div className="grid grid-cols-4 gap-1.5">
                 {[
@@ -399,8 +403,8 @@ export default function PipelineTab({
                     key={est.id}
                     type="button"
                     onClick={() => setFiltroEstadoObra(est.id)}
-                    className={`py-2 rounded-xl text-xs font-black border transition-all ${
-                      filtroEstadoObra === est.id ? 'bg-[#001757] text-white border-[#001757]' : 'bg-slate-50 text-slate-600 border-slate-200'
+                    className={`min-h-[42px] py-2 rounded-xl text-xs font-black border transition-all active:scale-95 ${
+                      filtroEstadoObra === est.id ? 'bg-[#001757] text-white border-[#001757] shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200'
                     }`}>
                     {est.label}
                   </button>
@@ -409,35 +413,35 @@ export default function PipelineTab({
             </div>
 
             {esAdmin && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">Sucursal</label>
                 <select
                   value={filtroSucursal}
                   onChange={(e) => setFiltroSucursal(e.target.value)}
-                  className="w-full h-11 px-3 rounded-2xl border border-slate-200 bg-white font-bold text-xs text-[#001757] outline-none">
+                  className="w-full h-12 px-3 rounded-2xl border border-slate-300 bg-white font-bold text-xs text-[#001757] outline-none">
                   <option value="TODAS">Todas las Sucursales ({SUCURSALES.length})</option>
                   {SUCURSALES.map(s => <option key={s.codigo} value={s.nombre}>{s.nombre} ({s.codigo})</option>)}
                 </select>
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">Actividad</label>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">Condición de Supervisión</label>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: 'TODAS', label: 'Todas' },
+                  { id: 'TODAS', label: 'Todas las obras' },
                   { id: 'HOY', label: 'Visitadas Hoy' },
-                  { id: 'FRIAS', label: 'Frías (>12d)' },
-                  { id: 'SIN_CLIENTE', label: 'Sin Cliente' }
+                  { id: 'FRIAS', label: 'Frías (>12 días)' },
+                  { id: 'SIN_CLIENTE', label: 'Sin Cliente Asignado' }
                 ].map(item => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setFiltroEspecial(item.id)}
-                    className={`py-2.5 px-3 rounded-2xl font-black text-xs border transition-all ${
+                    className={`min-h-[44px] px-3 rounded-2xl font-black text-xs border transition-all active:scale-95 ${
                       filtroEspecial === item.id 
-                        ? 'bg-[#001757] text-white border-[#001757]' 
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-[#001757] text-white border-[#001757] shadow-sm' 
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}>
                     {item.label}
                   </button>
@@ -445,18 +449,18 @@ export default function PipelineTab({
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">Fase Constructiva</label>
               <select
                 value={filtroFase}
                 onChange={(e) => setFiltroFase(e.target.value)}
-                className="w-full h-11 px-3 rounded-2xl border border-slate-200 bg-white font-bold text-xs text-[#001757] outline-none">
+                className="w-full h-12 px-3 rounded-2xl border border-slate-300 bg-white font-bold text-xs text-[#001757] outline-none">
                 <option value="TODAS">Todas las Fases</option>
                 {FASES_OBRA.map(f => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
 
-            <div className="pt-2 flex items-center gap-2">
+            <div className="pt-3 flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -468,15 +472,15 @@ export default function PipelineTab({
                   setSearch('');
                   setModalFiltrosAbierto(false);
                 }}
-                className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-black text-xs hover:bg-slate-50">
+                className="flex-1 min-h-[46px] rounded-2xl border border-slate-300 text-slate-700 font-black text-xs hover:bg-slate-50 active:scale-95">
                 Limpiar
               </button>
 
               <button
                 type="button"
                 onClick={() => setModalFiltrosAbierto(false)}
-                className="flex-1 py-3 rounded-2xl bg-[#0091FB] hover:bg-[#007be0] text-white font-black text-xs shadow-md shadow-electric/25">
-                Aplicar
+                className="flex-1 min-h-[46px] rounded-2xl bg-[#0091FB] hover:bg-[#007be0] text-white font-black text-xs shadow-md shadow-[#0091FB]/30 active:scale-95">
+                Aplicar Filtros
               </button>
             </div>
 

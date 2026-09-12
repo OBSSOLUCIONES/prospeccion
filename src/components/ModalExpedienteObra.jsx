@@ -61,22 +61,19 @@ export default function ModalExpedienteObra({
     const tel = clienteVinculado.contacto.replace(/\D/g, '');
     const telFinal = tel.length === 10 ? `52${tel}` : tel;
     const resp = clienteVinculado.responsable ? ` ${clienteVinculado.responsable}` : '';
-    const msg = encodeURIComponent(`Hola${resp}, te contacto respecto a la obra ${obra.nombre}.`);
+    const msg = encodeURIComponent(`Hola${resp}, te contacto de OBS respecto a la obra ${obra.nombre}.`);
     window.open(`https://wa.me/${telFinal}?text=${msg}`, '_blank');
   };
 
-  // Convertir Cotización a Venta Cerrada
   const ejecutarConversionAVenta = (e) => {
     e.preventDefault();
     if (!cotizacionAConvertir || !folioVenta.trim()) return;
 
-    // 1. Actualizar la cotización a GANADA
     const cotizacionActualizada = {
       ...cotizacionAConvertir,
       estatus: 'GANADA'
     };
 
-    // 2. Crear el nuevo movimiento de Venta vinculado
     const nuevaVenta = {
       id: `MOV-${Date.now().toString().slice(-6)}`,
       obraId: obra.id,
@@ -101,18 +98,23 @@ export default function ModalExpedienteObra({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full sm:max-w-3xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
+      <div className="w-full sm:max-w-3xl bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
         
+        {/* Barra de arrastre táctil (Android Bottom Sheet) */}
+        <div className="pt-2 pb-1 sm:hidden">
+          <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
+        </div>
+
         {/* CABECERA MAESTRA */}
         <div className="p-4 sm:p-5 bg-white border-b border-slate-200 shrink-0 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-mono text-xs font-black bg-blue-50 text-[#001757] px-2 py-0.5 rounded-lg border border-blue-200">
+                <span className="font-mono text-xs font-black bg-blue-50 text-[#001757] px-2.5 py-0.5 rounded-lg border border-blue-200">
                   {obra.id}
                 </span>
 
-                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border uppercase ${
+                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black border uppercase ${
                   obra.estadoObra === 'PAUSADA' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                   obra.estadoObra === 'TERMINADA' ? 'bg-slate-200 text-slate-800 border-slate-300' :
                   'bg-emerald-50 text-emerald-800 border-emerald-300'
@@ -120,15 +122,15 @@ export default function ModalExpedienteObra({
                   {obra.estadoObra === 'TERMINADA' ? 'Concluida' : obra.estadoObra === 'PAUSADA' ? 'Pausada' : 'En Proceso'}
                 </span>
 
-                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border uppercase ${FASE_COLORS[obra.estatusFase]}`}>
+                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black border uppercase ${FASE_COLORS[obra.estatusFase]}`}>
                   {obra.estatusFase}
                 </span>
               </div>
 
-              <h2 className="text-lg sm:text-xl font-black text-[#001757] leading-tight mt-1 truncate">
+              <h2 className="text-lg sm:text-xl font-black text-[#001757] leading-tight mt-1.5 truncate">
                 {obra.nombre}
               </h2>
-              <p className="text-xs font-semibold text-slate-400 truncate mt-0.5">
+              <p className="text-xs font-semibold text-slate-500 truncate mt-0.5">
                 {obra.sucursal} • {obra.direccion || 'Ubicación satelital fijada'}
               </p>
             </div>
@@ -137,7 +139,7 @@ export default function ModalExpedienteObra({
               <button
                 type="button"
                 onClick={() => onEditarObra(obra)}
-                className="w-9 h-9 rounded-2xl bg-blue-50 text-[#0091FB] hover:bg-blue-100 flex items-center justify-center transition-all active:scale-90"
+                className="w-10 h-10 rounded-2xl bg-blue-50 text-[#0091FB] hover:bg-blue-100 flex items-center justify-center transition-all active:scale-90"
                 title="Editar Obra">
                 <Pencil className="w-4 h-4" />
               </button>
@@ -145,7 +147,7 @@ export default function ModalExpedienteObra({
               <button
                 type="button"
                 onClick={() => onEliminarObra(obra)}
-                className="w-9 h-9 rounded-2xl bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition-all active:scale-90"
+                className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition-all active:scale-90"
                 title="Eliminar Obra">
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -153,41 +155,41 @@ export default function ModalExpedienteObra({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-9 h-9 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-all active:scale-90 ml-1">
+                className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-all active:scale-90 ml-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
 
-          {/* SUB-PESTAÑAS */}
+          {/* SUB-PESTAÑAS TÁCTILES */}
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl">
             <button
               type="button"
               onClick={() => setSubTab('bitacora')}
-              className={`py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                subTab === 'bitacora' ? 'bg-white text-[#001757] shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              className={`min-h-[42px] py-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+                subTab === 'bitacora' ? 'bg-white text-[#001757] shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}>
-              <Camera className="w-3.5 h-3.5" />
+              <Camera className="w-4 h-4" />
               <span>Bitácora ({visitasObra.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSubTab('comercial')}
-              className={`py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                subTab === 'comercial' ? 'bg-white text-[#001757] shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              className={`min-h-[42px] py-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+                subTab === 'comercial' ? 'bg-white text-[#001757] shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}>
-              <DollarSign className="w-3.5 h-3.5" />
+              <DollarSign className="w-4 h-4" />
               <span>Comercial ({movimientosObra.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSubTab('contacto')}
-              className={`py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                subTab === 'contacto' ? 'bg-white text-[#001757] shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              className={`min-h-[42px] py-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+                subTab === 'contacto' ? 'bg-white text-[#001757] shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}>
-              <User className="w-3.5 h-3.5" />
+              <User className="w-4 h-4" />
               <span>Contacto & GPS</span>
             </button>
           </div>
@@ -208,7 +210,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => onNuevaVisita(obra)}
-                  className="h-10 px-3.5 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all">
+                  className="min-h-[42px] px-4 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-1.5 transition-all">
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>+ Check-in</span>
                 </button>
@@ -216,15 +218,15 @@ export default function ModalExpedienteObra({
 
               {visitasObra.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 space-y-2">
-                  <Camera className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="text-xs font-bold text-slate-700">Sin visitas registradas aún</p>
+                  <Camera className="w-9 h-9 text-slate-300 mx-auto" />
+                  <p className="text-xs sm:text-sm font-bold text-slate-700">Sin visitas registradas aún</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {visitasObra.map((v, idx) => (
-                    <div key={v.id || idx} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
+                    <div key={v.id || idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 space-y-2.5">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="text-xs font-mono font-bold bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                        <span className="text-xs font-mono font-bold bg-white px-2.5 py-0.5 rounded-md border border-slate-200 text-slate-800">
                           Visita #{visitasObra.length - idx} • {v.fecha}
                         </span>
 
@@ -237,13 +239,13 @@ export default function ModalExpedienteObra({
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${FASE_COLORS[v.estatus]}`}>
                           {v.estatus}
                         </span>
-                        <span className="font-semibold text-[#001757] bg-blue-50 px-2 py-0.5 rounded-md">
+                        <span className="font-bold text-[#001757] bg-blue-50 px-2 py-0.5 rounded-md">
                           {v.actividad}
                         </span>
                       </div>
 
                       {v.observaciones && (
-                        <p className="text-xs text-slate-700 bg-white p-2.5 rounded-xl border border-slate-200">
+                        <p className="text-xs sm:text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
                           "{v.observaciones}"
                         </p>
                       )}
@@ -261,7 +263,7 @@ export default function ModalExpedienteObra({
                                 index: fIdx,
                                 titulo: `${obra.nombre} - ${v.fecha}`
                               })}
-                              className="w-16 h-16 rounded-xl object-cover border-2 border-slate-200 cursor-pointer shrink-0"
+                              className="w-18 h-18 rounded-xl object-cover border-2 border-slate-200 cursor-pointer shrink-0 active:scale-95 transition-all"
                             />
                           ))}
                         </div>
@@ -273,20 +275,20 @@ export default function ModalExpedienteObra({
             </div>
           )}
 
-          {/* COMERCIAL CON BOTÓN CONVERTIR A VENTA */}
+          {/* COMERCIAL */}
           {subTab === 'comercial' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-blue-50/70 border border-blue-200 p-3.5 rounded-2xl">
-                  <span className="text-[9px] font-black uppercase text-[#001757] tracking-widest block">Cotizado</span>
-                  <p className="text-base font-black text-[#001757] mt-0.5">{formatearMoneda(totalCotizado)}</p>
-                  <p className="text-[10px] font-bold text-[#0091FB] mt-0.5">{cotizaciones.length} cotización(es)</p>
+                <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-2xl">
+                  <span className="text-[10px] font-black uppercase text-[#001757] tracking-widest block">Cotizado</span>
+                  <p className="text-lg font-black text-[#001757] mt-0.5">{formatearMoneda(totalCotizado)}</p>
+                  <p className="text-xs font-bold text-[#0091FB] mt-0.5">{cotizaciones.length} cotización(es)</p>
                 </div>
 
-                <div className="bg-emerald-50/70 border border-emerald-200 p-3.5 rounded-2xl">
-                  <span className="text-[9px] font-black uppercase text-emerald-800 tracking-widest block">Vendido</span>
-                  <p className="text-base font-black text-emerald-800 mt-0.5">{formatearMoneda(totalVendido)}</p>
-                  <p className="text-[10px] font-bold text-emerald-600 mt-0.5">{ventas.length} venta(s)</p>
+                <div className="bg-emerald-50/80 border border-emerald-200 p-4 rounded-2xl">
+                  <span className="text-[10px] font-black uppercase text-emerald-800 tracking-widest block">Vendido</span>
+                  <p className="text-lg font-black text-emerald-800 mt-0.5">{formatearMoneda(totalVendido)}</p>
+                  <p className="text-xs font-bold text-emerald-600 mt-0.5">{ventas.length} venta(s)</p>
                 </div>
               </div>
 
@@ -294,7 +296,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => onNuevoMovimiento({ obra, tipo: 'COTIZACION' })}
-                  className="flex-1 h-10 px-3 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
+                  className="flex-1 min-h-[44px] px-3 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all">
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>+ Cotización</span>
                 </button>
@@ -302,7 +304,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => onNuevoMovimiento({ obra, tipo: 'VENTA' })}
-                  className="flex-1 h-10 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
+                  className="flex-1 min-h-[44px] px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all">
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>+ Venta Cerrada</span>
                 </button>
@@ -310,8 +312,8 @@ export default function ModalExpedienteObra({
 
               {movimientosObra.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 space-y-2">
-                  <FileSpreadsheet className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="text-xs font-bold text-slate-700">Sin movimientos comerciales</p>
+                  <FileSpreadsheet className="w-9 h-9 text-slate-300 mx-auto" />
+                  <p className="text-xs sm:text-sm font-bold text-slate-700">Sin movimientos comerciales</p>
                 </div>
               ) : (
                 <div className="space-y-2.5">
@@ -323,14 +325,14 @@ export default function ModalExpedienteObra({
                     return (
                       <div 
                         key={mov.id}
-                        className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
+                        className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
                           esVenta 
-                            ? (esFactura ? 'bg-indigo-50/70 border-indigo-200' : 'bg-emerald-50/70 border-emerald-200')
+                            ? (esFactura ? 'bg-indigo-50/80 border-indigo-200' : 'bg-emerald-50/80 border-emerald-200')
                             : 'bg-white border-slate-200'
                         }`}>
                         <div className="min-w-0 space-y-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
                               esVenta 
                                 ? (esFactura ? 'bg-indigo-700 text-white' : 'bg-emerald-700 text-white')
                                 : (mov.estatus === 'GANADA' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-[#001757] text-white')
@@ -338,27 +340,27 @@ export default function ModalExpedienteObra({
                               {mov.comprobante} {mov.estatus === 'GANADA' ? '(CERRADA)' : ''}
                             </span>
 
-                            <span className="font-mono text-xs font-bold text-slate-800">
+                            <span className="font-mono text-xs sm:text-sm font-bold text-slate-800">
                               {mov.folio}
                             </span>
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[11px] text-slate-400">
                               {mov.fecha}
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-black text-slate-900">
+                            <p className="text-sm sm:text-base font-black text-slate-900">
                               {formatearMoneda(mov.monto)}
                             </p>
                             {esVenta && mov.formaPago && (
-                              <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                                Pago: {mov.formaPago}
+                              <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                                {mov.formaPago}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* ACCIONES: CONVERTIR EN VENTA O VER PDF */}
+                        {/* Acciones */}
                         <div className="flex items-center gap-1.5 shrink-0">
                           {esCotizacionPendiente && (
                             <button
@@ -367,9 +369,9 @@ export default function ModalExpedienteObra({
                                 setCotizacionAConvertir(mov);
                                 setFolioVenta('');
                               }}
-                              className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-[11px] rounded-xl flex items-center gap-1 shadow-xs transition-all">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Convertir a Venta</span>
+                              className="min-h-[38px] px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1 shadow-sm transition-all">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Cerrar Venta</span>
                             </button>
                           )}
 
@@ -381,8 +383,8 @@ export default function ModalExpedienteObra({
                                 url: mov.documentoAdjunto.url,
                                 titulo: `${mov.folio} - ${obra.nombre}`
                               })}
-                              className="h-8 px-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1">
-                              <FileText className="w-3.5 h-3.5 text-[#0091FB]" />
+                              className="min-h-[38px] px-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1 active:scale-95">
+                              <FileText className="w-4 h-4 text-[#0091FB]" />
                               <span>PDF</span>
                             </button>
                           )}
@@ -401,7 +403,7 @@ export default function ModalExpedienteObra({
             <div className="space-y-4">
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
                     Cliente Vinculado
                   </span>
 
@@ -409,7 +411,7 @@ export default function ModalExpedienteObra({
                     <button
                       type="button"
                       onClick={() => onVincularCliente(obra)}
-                      className="text-xs font-black text-[#0091FB] hover:underline">
+                      className="text-xs sm:text-sm font-black text-[#0091FB] hover:underline">
                       Cambiar cliente
                     </button>
                   )}
@@ -429,16 +431,16 @@ export default function ModalExpedienteObra({
                         <>
                           <a
                             href={`tel:${clienteVinculado.contacto.replace(/\D/g, '')}`}
-                            className="h-9 px-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#001757] font-black text-xs rounded-xl flex items-center gap-1.5">
-                            <Phone className="w-3.5 h-3.5 text-[#0091FB]" />
+                            className="min-h-[42px] px-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#001757] font-black text-xs sm:text-sm rounded-xl flex items-center gap-1.5 active:scale-95">
+                            <Phone className="w-4 h-4 text-[#0091FB]" />
                             <span>Llamar</span>
                           </a>
 
                           <button
                             type="button"
                             onClick={enviarWhatsApp}
-                            className="h-9 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-black text-xs rounded-xl flex items-center gap-1.5">
-                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            className="min-h-[42px] px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-black text-xs sm:text-sm rounded-xl flex items-center gap-1.5 active:scale-95">
+                            <MessageCircle className="w-4 h-4 text-emerald-600" />
                             <span>WhatsApp</span>
                           </button>
                         </>
@@ -446,28 +448,28 @@ export default function ModalExpedienteObra({
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-center space-y-1.5">
-                    <p className="text-xs font-bold text-amber-900">Sin cliente asignado</p>
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-center space-y-2">
+                    <p className="text-xs sm:text-sm font-bold text-amber-900">Sin cliente asignado</p>
                     <button
                       type="button"
                       onClick={() => onVincularCliente(obra)}
-                      className="h-8 px-3 bg-amber-600 text-white font-black text-xs rounded-xl inline-flex items-center gap-1">
-                      <Link2 className="w-3.5 h-3.5" />
+                      className="min-h-[42px] px-4 bg-amber-600 text-white font-black text-xs rounded-xl inline-flex items-center gap-1.5 active:scale-95">
+                      <Link2 className="w-4 h-4" />
                       <span>Vincular Cliente</span>
                     </button>
                   </div>
                 )}
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Ubicación GPS</span>
-                <p className="text-xs font-semibold text-slate-800">{obra.direccion || 'Ubicación fijada en mapa'}</p>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Ubicación GPS</span>
+                <p className="text-xs sm:text-sm font-semibold text-slate-800">{obra.direccion || 'Ubicación fijada en mapa'}</p>
                 <button
                   type="button"
                   onClick={() => onAbrirRuta({ nombre: obra.nombre, direccion: obra.direccion, lat: obra.lat, lng: obra.lng })}
-                  className="w-full h-11 bg-[#001757] text-white font-black text-xs rounded-xl flex items-center justify-center gap-2">
+                  className="w-full min-h-[48px] bg-[#001757] text-white font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-98 shadow-sm">
                   <Navigation className="w-4 h-4 text-[#0091FB]" />
-                  <span>Iniciar Ruta GPS (Waze / Maps)</span>
+                  <span>Iniciar Ruta GPS (Waze / Google Maps)</span>
                 </button>
               </div>
             </div>
@@ -476,21 +478,21 @@ export default function ModalExpedienteObra({
         </div>
 
         {/* PIE DE PÁGINA */}
-        <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
+        <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => onEditarObra(obra)}
-              className="h-10 px-3 rounded-xl bg-slate-200 text-slate-800 font-black text-xs flex items-center gap-1.5 active:scale-95">
-              <Pencil className="w-3.5 h-3.5 text-[#0091FB]" />
+              className="min-h-[44px] px-4 rounded-xl bg-slate-200 text-slate-800 font-black text-xs sm:text-sm flex items-center gap-1.5 active:scale-95">
+              <Pencil className="w-4 h-4 text-[#0091FB]" />
               <span>Editar</span>
             </button>
 
             <button
               type="button"
               onClick={() => onEliminarObra(obra)}
-              className="h-10 px-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-black text-xs flex items-center gap-1.5 active:scale-95">
-              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              className="min-h-[44px] px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-black text-xs sm:text-sm flex items-center gap-1.5 active:scale-95">
+              <Trash2 className="w-4 h-4 text-rose-600" />
               <span>Eliminar</span>
             </button>
           </div>
@@ -498,7 +500,7 @@ export default function ModalExpedienteObra({
           <button
             type="button"
             onClick={onClose}
-            className="h-10 px-5 rounded-xl bg-[#001757] text-white font-black text-xs shadow-md active:scale-95">
+            className="min-h-[44px] px-6 rounded-xl bg-[#001757] text-white font-black text-xs sm:text-sm shadow-md active:scale-95">
             Cerrar
           </button>
         </div>
@@ -528,7 +530,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => setTipoComprobanteVenta('REMISIÓN')}
-                  className={`py-1.5 rounded-lg font-black text-xs ${
+                  className={`min-h-[38px] py-1.5 rounded-lg font-black text-xs ${
                     tipoComprobanteVenta === 'REMISIÓN' ? 'bg-emerald-600 text-white' : 'text-slate-600'
                   }`}>
                   Remisión
@@ -536,7 +538,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => setTipoComprobanteVenta('FACTURA')}
-                  className={`py-1.5 rounded-lg font-black text-xs ${
+                  className={`min-h-[38px] py-1.5 rounded-lg font-black text-xs ${
                     tipoComprobanteVenta === 'FACTURA' ? 'bg-indigo-600 text-white' : 'text-slate-600'
                   }`}>
                   Factura
@@ -550,7 +552,7 @@ export default function ModalExpedienteObra({
                   value={folioVenta}
                   onChange={(e) => setFolioVenta(e.target.value)}
                   placeholder={tipoComprobanteVenta === 'REMISIÓN' ? 'REM-501' : 'FAC-809'}
-                  className="w-full h-10 px-3 rounded-xl border border-slate-300 font-bold text-slate-900 outline-none focus:border-[#0091FB]"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-300 font-bold text-slate-900 outline-none focus:border-[#0091FB]"
                 />
               </div>
 
@@ -559,7 +561,7 @@ export default function ModalExpedienteObra({
                 <select
                   value={formaPagoVenta}
                   onChange={(e) => setFormaPagoVenta(e.target.value)}
-                  className="w-full h-10 px-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 outline-none">
+                  className="w-full h-11 px-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 outline-none">
                   {CAT_FORMA_PAGO.map(fp => <option key={fp} value={fp}>{fp}</option>)}
                 </select>
               </div>
@@ -568,12 +570,12 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => setCotizacionAConvertir(null)}
-                  className="w-full py-2.5 rounded-xl border border-slate-300 font-bold text-slate-600">
+                  className="w-full min-h-[44px] py-2.5 rounded-xl border border-slate-300 font-bold text-slate-600">
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md">
+                  className="w-full min-h-[44px] py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md">
                   Confirmar Venta
                 </button>
               </div>

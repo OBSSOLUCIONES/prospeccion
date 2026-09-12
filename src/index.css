@@ -5,15 +5,41 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: #F8FAFC;
-    color: #0F172A;
+  :root {
+    --app-navy: #001757;
+    --app-electric: #0091FB;
+    --app-bg: #F8FAFC;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+    user-select: none;
+    -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--app-bg);
+    color: #0F172A;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
+}
+
+/* Área Segura para Tablets y Celulares con Notch / Barra Inferior Android */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Contenedor del Mapa Satelital */
@@ -22,6 +48,7 @@
   height: 100%;
   border-radius: 1.5rem;
   z-index: 10;
+  font-family: inherit;
 }
 
 /* Ocultar barra de scroll en carruseles táctiles */
@@ -31,4 +58,13 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Animaciones Táctiles de Alta Frecuencia (60fps Android Native) */
+.active-press {
+  transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.12s ease;
+}
+.active-press:active {
+  transform: scale(0.96);
+  opacity: 0.88;
 }
