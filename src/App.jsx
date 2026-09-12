@@ -60,6 +60,18 @@ function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
   return Math.round(R * c);
 }
 
+// Helper para descomponer fechas en estándar analítico para Power BI
+function formatearFechaParaPowerBI(fechaStr) {
+  if (!fechaStr) return { fecha_corta: null, id_fecha: null, hora: null, iso: null };
+  const limpia = fechaStr.replace('T', ' ');
+  const partes = limpia.split(' ');
+  const fechaCorta = partes[0] || null;
+  const hora = partes[1] || '00:00';
+  const idFecha = fechaCorta ? Number(fechaCorta.replace(/-/g, '')) : null;
+  const iso = fechaCorta ? `${fechaCorta}T${hora}:00` : null;
+  return { fecha_corta: fechaCorta, id_fecha: idFecha, hora, iso };
+}
+
 export default function App() {
   const [tab, setTab] = useState('pipeline');
   
@@ -330,7 +342,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR POWER BI
+  // EXPORTADOR POWER BI CON LLAVES DE FECHA ANALÍTICAS (DAX READY)
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -389,6 +401,8 @@ export default function App() {
       const totalCotizado = movsObra.filter(m => m.tipo === 'COTIZACION').reduce((s, c) => s + (Number(c.monto) || 0), 0);
       const totalVendido = movsObra.filter(m => m.tipo === 'VENTA').reduce((s, v) => s + (Number(v.monto) || 0), 0);
 
+      const fInfo = formatearFechaParaPowerBI(ultima ? ultima.fecha : null);
+
       return {
         obra_id: o.id,
         cliente_id: o.clienteId || 'SIN_CLIENTE',
@@ -403,7 +417,9 @@ export default function App() {
         total_visitas: visObra.length,
         dias_sin_visita: diasSinVisita,
         alerta_obra_fria: diasSinVisita > 12 ? 'SI' : 'NO',
-        fecha_ultima_visita: ultima ? ultima.fecha.replace(' ', 'T') : null,
+        fecha_ultima_visita_iso: fInfo.iso,
+        fecha_corta_ultima_visita: fInfo.fecha_corta,
+        id_fecha_ultima_visita: fInfo.id_fecha,
         total_cotizado_mxn: totalCotizado,
         total_vendido_mxn: totalVendido,
         latitud: o.lat ? Number(parseFloat(o.lat).toFixed(6)) : null,
@@ -412,43 +428,55 @@ export default function App() {
       };
     });
 
-    // 3. Fact_Visitas
+    // 3. Fact_Visitas (Con llaves DAX para tablas Calendario)
     const hojaVisitas = visitas
       .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
-      .map(v => ({
-        visita_id: v.id,
-        obra_id: v.obraId,
-        sucursal: v.sucursal,
-        asesor_nombre: v.asesorNombre || 'Asesor',
-        fecha_hora: v.fecha ? v.fecha.replace(' ', 'T') : null,
-        fase_detectada: v.estatus,
-        actividad: v.actividad,
-        distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
-        estado_auditoria_gps: v.auditoriaEstado || 'remoto',
-        latitud_real_gps: v.latGpsReal ? Number(parseFloat(v.latGpsReal).toFixed(6)) : null,
-        longitud_real_gps: v.lngGpsReal ? Number(parseFloat(v.lngGpsReal).toFixed(6)) : null,
-        cantidad_fotos: (v.fotos || []).length,
-        observaciones: v.observaciones || ''
-      }));
+      .map(v => {
+        const fInfo = formatearFechaParaPowerBI(v.fecha);
+        return {
+          visita_id: v.id,
+          obra_id: v.obraId,
+          sucursal: v.sucursal,
+          asesor_nombre: v.asesorNombre || 'Asesor',
+          fecha_hora_iso: fInfo.iso,
+          fecha_corta: fInfo.fecha_corta,
+          id_fecha: fInfo.id_fecha,
+          hora_registro: fInfo.hora,
+          fase_detectada: v.estatus,
+          actividad: v.actividad,
+          distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
+          estado_auditoria_gps: v.auditoriaEstado || 'remoto',
+          latitud_real_gps: v.latGpsReal ? Number(parseFloat(v.latGpsReal).toFixed(6)) : null,
+          longitud_real_gps: v.lngGpsReal ? Number(parseFloat(v.lngGpsReal).toFixed(6)) : null,
+          cantidad_fotos: (v.fotos || []).length,
+          observaciones: v.observaciones || ''
+        };
+      });
 
-    // 4. Fact_Movimientos
+    // 4. Fact_Movimientos (Con llaves DAX para tablas Calendario)
     const obrasIdsValidas = obrasAExportar.map(o => o.id);
     const hojaMovimientos = movimientos
       .filter(m => obrasIdsValidas.includes(m.obraId))
-      .map(m => ({
-        movimiento_id: m.id,
-        obra_id: m.obraId,
-        tipo_movimiento: m.tipo,
-        tipo_comprobante: m.comprobante || (m.tipo === 'VENTA' ? 'REMISION' : 'COTIZACION'),
-        folio_documento: m.folio,
-        monto_mxn: Number(m.monto) || 0,
-        estatus: m.estatus || 'PENDIENTE',
-        forma_pago: m.formaPago || 'N/A',
-        tipo_entrega: m.tipoEntrega || 'DOMICILIO',
-        fecha_hora: m.fecha ? m.fecha.replace(' ', 'T') : null,
-        cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
-        tiene_adjunto: m.documentoAdjunto?.url ? 'SI' : 'NO'
-      }));
+      .map(m => {
+        const fInfo = formatearFechaParaPowerBI(m.fecha);
+        return {
+          movimiento_id: m.id,
+          obra_id: m.obraId,
+          tipo_movimiento: m.tipo,
+          tipo_comprobante: m.comprobante || (m.tipo === 'VENTA' ? 'REMISION' : 'COTIZACION'),
+          folio_documento: m.folio,
+          monto_mxn: Number(m.monto) || 0,
+          estatus: m.estatus || 'PENDIENTE',
+          forma_pago: m.formaPago || 'N/A',
+          tipo_entrega: m.tipoEntrega || 'DOMICILIO',
+          fecha_hora_iso: fInfo.iso,
+          fecha_corta: fInfo.fecha_corta,
+          id_fecha: fInfo.id_fecha,
+          hora_registro: fInfo.hora,
+          cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
+          tiene_adjunto: m.documentoAdjunto?.url ? 'SI' : 'NO'
+        };
+      });
 
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaClientes), 'Dim_Clientes');
@@ -492,7 +520,7 @@ export default function App() {
         setFiltroSucursal={setFiltroSucursal}
       />
 
-      {/* BANNER INTELIGENTE: PROXIMIDAD A OBRA (SOLO ASESORES) */}
+      {/* BANNER INTELIGENTE: PROXIMIDAD A OBRA (<180M) */}
       {obraProxima && !algunModalAbierto && (
         <div className="mx-3 mt-2.5 p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
           <div className="min-w-0">
@@ -533,6 +561,11 @@ export default function App() {
             onEditarObra={(o) => { setObraAEditar(o); setModalObraAbierto(true); }}
             onEliminarObra={(o) => setItemAEliminar({ tipo: 'obra', data: o })}
             usuarioActivo={usuarioActivo}
+            tabletPos={tabletPos}
+            onNuevaVisita={(obra) => {
+              setObraParaVisita(obra);
+              setModalVisitaAbierto(true);
+            }}
           />
         )}
 
@@ -589,7 +622,7 @@ export default function App() {
 
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* PANEL DE METAS Y KPIS (CON VISTA MULTI-SUCURSAL PARA DIRECTOR) */}
+      {/* PANEL DE METAS Y KPIS */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
@@ -605,6 +638,7 @@ export default function App() {
         visitas={visitas}
         obras={obras}
         movimientos={movimientos}
+        onSeleccionarSucursal={(suc) => setFiltroSucursal(suc)}
       />
 
       {/* EXPEDIENTE 360° */}

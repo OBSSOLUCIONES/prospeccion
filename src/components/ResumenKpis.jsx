@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
   X, Target, DollarSign, Briefcase, TrendingUp, 
-  Snowflake, CheckCircle2, Building2, AlertCircle, Clock
+  Snowflake, CheckCircle2, Building2, AlertCircle, Clock, ChevronRight
 } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
@@ -27,9 +27,9 @@ export default function ResumenKpis({
   totalObrasFrias,
   esDirector = false,
   visitas = [],
-  obras = []
+  obras = [],
+  onSeleccionarSucursal
 }) {
-  const [vistaDirector, setVistaDirector] = useState('SUCURSALES'); // 'SUCURSALES' | 'GENERAL'
   const hoyStr = new Date().toISOString().slice(0, 10);
 
   if (!isOpen) return null;
@@ -80,7 +80,7 @@ export default function ResumenKpis({
               </span>
             </div>
             <p className="text-xs text-slate-400 font-medium">
-              {esDirector ? `Monitoreo de jornada de hoy (${hoyStr})` : 'Progreso de supervisión en campo'}
+              {esDirector ? `Toca una sucursal para filtrarla y auditarla (${hoyStr})` : 'Progreso de supervisión en campo'}
             </p>
           </div>
 
@@ -124,10 +124,10 @@ export default function ResumenKpis({
               </div>
             </div>
 
-            {/* LISTADO DE CUMPLIMIENTO POR SUCURSAL (HOY) */}
+            {/* LISTADO INTERACTIVO: TOCAR UNA SUCURSAL PARA AUDITARLA */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between px-1 text-[11px] font-black uppercase text-slate-400">
-                <span>Sucursal</span>
+                <span>Sucursal (Toca para auditar)</span>
                 <span>Visitas Hoy / Meta</span>
               </div>
 
@@ -137,7 +137,17 @@ export default function ResumenKpis({
                   const esAmarillo = s.estado === 'AMARILLO';
 
                   return (
-                    <div key={s.codigo} className="p-3 bg-white flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors">
+                    <div 
+                      key={s.codigo}
+                      onClick={() => {
+                        if (onSeleccionarSucursal) {
+                          onSeleccionarSucursal(s.nombre);
+                          onClose();
+                        }
+                      }}
+                      className="p-3 bg-white flex items-center justify-between gap-2 hover:bg-blue-50/70 active:scale-[0.99] cursor-pointer transition-all group"
+                      title={`Filtrar toda la app a ${s.nombre}`}>
+                      
                       <div className="min-w-0 flex items-center gap-2">
                         {/* Indicador de semáforo */}
                         <span className={`w-3 h-3 rounded-full shrink-0 ${
@@ -146,7 +156,7 @@ export default function ResumenKpis({
                         }`} />
 
                         <div>
-                          <p className="font-black text-slate-900 text-xs truncate leading-tight">
+                          <p className="font-black text-slate-900 group-hover:text-[#0091FB] text-xs truncate leading-tight transition-colors">
                             {s.nombre} ({s.codigo})
                           </p>
                           <p className="text-[10px] text-slate-400 font-semibold">
@@ -155,27 +165,30 @@ export default function ResumenKpis({
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <span className={`text-xs font-black ${
-                            esVerde ? 'text-emerald-700' : esAmarillo ? 'text-amber-800' : 'text-slate-400'
-                          }`}>
-                            {s.visitasHoy} / {s.meta}
-                          </span>
-                          <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
-                            esVerde ? 'bg-emerald-100 text-emerald-800' : esAmarillo ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-500'
-                          }`}>
-                            {s.porcentaje}%
-                          </span>
+                      <div className="text-right shrink-0 flex items-center gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <span className={`text-xs font-black ${
+                              esVerde ? 'text-emerald-700' : esAmarillo ? 'text-amber-800' : 'text-slate-400'
+                            }`}>
+                              {s.visitasHoy} / {s.meta}
+                            </span>
+                            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
+                              esVerde ? 'bg-emerald-100 text-emerald-800' : esAmarillo ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {s.porcentaje}%
+                            </span>
+                          </div>
+                          
+                          <div className="w-20 bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1 ml-auto">
+                            <div
+                              className={`h-full rounded-full ${esVerde ? 'bg-emerald-500' : esAmarillo ? 'bg-amber-400' : 'bg-slate-300'}`}
+                              style={{ width: `${s.porcentaje}%` }}
+                            />
+                          </div>
                         </div>
-                        
-                        {/* Micro barra */}
-                        <div className="w-20 bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1 ml-auto">
-                          <div
-                            className={`h-full rounded-full ${esVerde ? 'bg-emerald-500' : esAmarillo ? 'bg-amber-400' : 'bg-slate-300'}`}
-                            style={{ width: `${s.porcentaje}%` }}
-                          />
-                        </div>
+
+                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-[#0091FB] transition-colors" />
                       </div>
 
                     </div>
@@ -188,7 +201,6 @@ export default function ResumenKpis({
         ) : (
           /* VISTA NORMAL PARA EL ASESOR */
           <div className="space-y-3">
-            {/* Meta Diaria del Asesor */}
             <div className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-4 rounded-2xl shadow-sm space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -226,7 +238,6 @@ export default function ResumenKpis({
               )}
             </div>
 
-            {/* Tarjetas de KPIs */}
             <div className="grid grid-cols-2 gap-2.5">
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                 <div className="flex items-center gap-1.5 text-blue-700 mb-1">
@@ -269,7 +280,6 @@ export default function ResumenKpis({
           </div>
         )}
 
-        {/* Botón de cierre */}
         <button
           type="button"
           onClick={onClose}

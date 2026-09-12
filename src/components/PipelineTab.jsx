@@ -1,10 +1,31 @@
 // src/components/PipelineTab.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Search, SlidersHorizontal, User, ChevronRight,
-  Pencil, Trash2, Building2, Flame, Snowflake, Clock, X
+  Pencil, Trash2, Building2, Flame, Snowflake, Clock, X,
+  Camera, Navigation, MapPin, ArrowDownUp
 } from 'lucide-react';
 import { SUCURSALES, FASES_OBRA, FASE_COLORS } from '../data/constants';
+
+function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371e3;
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+const formatearDistancia = (metros) => {
+  if (metros === null || metros === undefined) return null;
+  if (metros < 1000) return `${metros}m`;
+  return `${(metros / 1000).toFixed(1)}km`;
+};
 
 const formatearMoneda = (val) => {
   return new Intl.NumberFormat('es-MX', {
@@ -38,65 +59,94 @@ export default function PipelineTab({
   filtroSucursal, 
   setFiltroSucursal, 
   onSeleccionarObra,
+  onNuevaObra,
   onEditarObra,
   onEliminarObra,
-  usuarioActivo 
+  usuarioActivo,
+  tabletPos,
+  onNuevaVisita
 }) {
-  const esAdmin = usuarioActivo?.sucursal === 'TODAS';
+  const esAdmin = usuarioActivo?.sucursal === 'TODAS' || usuarioActivo?.rol === 'admin';
   const [filtroEspecial, setFiltroEspecial] = useState('TODAS');
-  const [filtroEstadoObra, setFiltroEstadoObra] = useState('ACTIVA'); // 'ACTIVA' por defecto para pantalla limpia
+  const [filtroEstadoObra, setFiltroEstadoObra] = useState('ACTIVA');
   const [modalFiltrosAbierto, setModalFiltrosAbierto] = useState(false);
+  
+  // ORDENAMIENTO DE ÉLITE: 'CERCANIA' | 'DIAS_SIN_VISITA' | 'RECIENTES'
+  const [criterioOrden, setCriterioOrden] = useState('CERCANIA');
 
   const obrasPorSucursal = obras.filter(o => 
     filtroSucursal === 'TODAS' || o.sucursal === filtroSucursal
   );
 
-  const obrasProcesadas = obrasPorSucursal.map(obra => {
-    const visitasDeObra = visitas.filter(v => v.obraId === obra.id)
-      .sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')));
-    
-    const movimientosDeObra = movimientos.filter(m => m.obraId === obra.id);
-    const ultimaVisita = visitasDeObra[0] || null;
-    const totalVisitas = visitasDeObra.length;
-    const cliente = clientes.find(c => c.id === obra.clienteId);
+  const obrasProcesadas = useMemo(() => {
+    return obrasPorSucursal.map(obra => {
+      const visitasDeObra = visitas.filter(v => v.obraId === obra.id)
+        .sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')));
+      
+      const movimientosDeObra = movimientos.filter(m => m.obraId === obra.id);
+      const ultimaVisita = visitasDeObra[0] || null;
+      const totalVisitas = visitasDeObra.length;
+      const cliente = clientes.find(c => c.id === obra.clienteId);
 
-    const cotizado = movimientosDeObra
-      .filter(m => m.tipo === 'COTIZACION')
-      .reduce((acc, c) => acc + (Number(c.monto) || 0), 0);
+      const cotizado = movimientosDeObra
+        .filter(m => m.tipo === 'COTIZACION')
+        .reduce((acc, c) => acc + (Number(c.monto) || 0), 0);
 
-    const vendido = movimientosDeObra
-      .filter(m => m.tipo === 'VENTA')
-      .reduce((acc, v) => acc + (Number(v.monto) || 0), 0);
+      const vendido = movimientosDeObra
+        .filter(m => m.tipo === 'VENTA')
+        .reduce((acc, v) => acc + (Number(v.monto) || 0), 0);
 
-    const diasSinVisita = ultimaVisita ? calcularDiasDesdeFecha(ultimaVisita.fecha) : 999;
+      const diasSinVisita = ultimaVisita ? calcularDiasDesdeFecha(ultimaVisita.fecha) : 999;
 
-    return {
-      ...obra,
-      cliente,
-      totalVisitas,
-      cotizado,
-      vendido,
-      diasSinVisita
-    };
-  });
+      const distanciaMetros = (tabletPos?.lat && tabletPos?.lng && obra.lat && obra.lng)
+        ? calcularDistanciaMetros(tabletPos.lat, tabletPos.lng, parseFloat(obra.lat), parseFloat(obra.lng))
+        : null;
 
-  const obrasFiltradas = obrasProcesadas
-    .filter(o => filtroEstadoObra === 'TODAS' || (o.estadoObra || 'ACTIVA') === filtroEstadoObra)
-    .filter(o => filtroFase === 'TODAS' || o.estatusFase === filtroFase)
-    .filter(o => {
-      if (filtroEspecial === 'HOY') return o.diasSinVisita === 0;
-      if (filtroEspecial === 'FRIAS') return o.diasSinVisita > 12;
-      if (filtroEspecial === 'SIN_CLIENTE') return !o.clienteId;
-      return true;
-    })
-    .filter(o => {
-      const q = search.toLowerCase();
-      return (
-        o.nombre.toLowerCase().includes(q) ||
-        o.id.toLowerCase().includes(q) ||
-        (o.cliente?.nombreCliente && o.cliente.nombreCliente.toLowerCase().includes(q))
-      );
+      return {
+        ...obra,
+        cliente,
+        totalVisitas,
+        cotizado,
+        vendido,
+        diasSinVisita,
+        distanciaMetros
+      };
     });
+  }, [obrasPorSucursal, visitas, movimientos, clientes, tabletPos]);
+
+  const obrasFiltradas = useMemo(() => {
+    const list = obrasProcesadas
+      .filter(o => filtroEstadoObra === 'TODAS' || (o.estadoObra || 'ACTIVA') === filtroEstadoObra)
+      .filter(o => filtroFase === 'TODAS' || o.estatusFase === filtroFase)
+      .filter(o => {
+        if (filtroEspecial === 'HOY') return o.diasSinVisita === 0;
+        if (filtroEspecial === 'FRIAS') return o.diasSinVisita > 12;
+        if (filtroEspecial === 'SIN_CLIENTE') return !o.clienteId;
+        return true;
+      })
+      .filter(o => {
+        const q = search.toLowerCase();
+        return (
+          o.nombre.toLowerCase().includes(q) ||
+          o.id.toLowerCase().includes(q) ||
+          (o.cliente?.nombreCliente && o.cliente.nombreCliente.toLowerCase().includes(q))
+        );
+      });
+
+    // Aplicar ordenamiento
+    return list.sort((a, b) => {
+      if (criterioOrden === 'CERCANIA') {
+        if (a.distanciaMetros === null) return 1;
+        if (b.distanciaMetros === null) return -1;
+        return a.distanciaMetros - b.distanciaMetros;
+      }
+      if (criterioOrden === 'DIAS_SIN_VISITA') {
+        return b.diasSinVisita - a.diasSinVisita; // Más frías primero
+      }
+      // 'RECIENTES'
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+  }, [obrasProcesadas, filtroEstadoObra, filtroFase, filtroEspecial, search, criterioOrden]);
 
   const filtrosActivosCount = (filtroSucursal !== 'TODAS' ? 1 : 0) + 
                              (filtroFase !== 'TODAS' ? 1 : 0) + 
@@ -137,6 +187,49 @@ export default function PipelineTab({
         </button>
       </div>
 
+      {/* CHIPS RÁPIDOS DE ORDENAMIENTO (MÁS CERCANAS / MÁS FRÍAS / RECIENTES) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0 mr-0.5">
+          <ArrowDownUp className="w-3 h-3" /> Orden:
+        </span>
+
+        <button
+          type="button"
+          onClick={() => setCriterioOrden('CERCANIA')}
+          className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] whitespace-nowrap transition-all flex items-center gap-1 ${
+            criterioOrden === 'CERCANIA'
+              ? 'bg-[#001757] text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}>
+          <MapPin className="w-3 h-3 text-[#0091FB]" />
+          <span>📍 Más Cercanas a mí</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCriterioOrden('DIAS_SIN_VISITA')}
+          className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] whitespace-nowrap transition-all flex items-center gap-1 ${
+            criterioOrden === 'DIAS_SIN_VISITA'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}>
+          <Snowflake className="w-3 h-3 text-rose-400" />
+          <span>❄️ Más Frías Primero</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCriterioOrden('RECIENTES')}
+          className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] whitespace-nowrap transition-all flex items-center gap-1 ${
+            criterioOrden === 'RECIENTES'
+              ? 'bg-[#001757] text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}>
+          <Clock className="w-3 h-3 text-slate-400" />
+          <span>Recientes</span>
+        </button>
+      </div>
+
       <div className="flex items-center justify-between px-1 text-[11px] font-semibold text-slate-400">
         <span>{obrasFiltradas.length} obras {filtroEstadoObra === 'ACTIVA' ? 'en proceso' : filtroEstadoObra === 'PAUSADA' ? 'pausadas' : filtroEstadoObra === 'TERMINADA' ? 'concluidas' : 'totales'}</span>
         {filtroSucursal !== 'TODAS' && (
@@ -146,7 +239,7 @@ export default function PipelineTab({
         )}
       </div>
 
-      {/* LISTADO DE TARJETAS */}
+      {/* LISTADO DE TARJETAS DE OBRAS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {obrasFiltradas.length === 0 ? (
           <div className="col-span-full p-8 text-center bg-white rounded-3xl border border-slate-200/90 space-y-1.5">
@@ -157,6 +250,7 @@ export default function PipelineTab({
         ) : (
           obrasFiltradas.map(obra => {
             const esFria = obra.diasSinVisita > 12;
+            const distanciaTexto = formatearDistancia(obra.distanciaMetros);
 
             return (
               <div
@@ -164,6 +258,7 @@ export default function PipelineTab({
                 onClick={() => onSeleccionarObra(obra)}
                 className="w-full bg-white hover:border-[#0091FB] active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/90 px-3.5 py-3 shadow-2xs hover:shadow-sm transition-all space-y-2">
                 
+                {/* LÍNEA 1: ID + NOMBRE + DISTANCIA GPS + FASE */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex items-center gap-1.5">
                     <span className="font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] shrink-0">
@@ -175,6 +270,14 @@ export default function PipelineTab({
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
+                    {/* Badge de Distancia GPS Real */}
+                    {distanciaTexto && (
+                      <span className="text-[9px] font-black bg-blue-50 text-[#0091FB] border border-blue-200 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                        <MapPin className="w-2.5 h-2.5 text-rose-500" />
+                        {distanciaTexto}
+                      </span>
+                    )}
+
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider ${FASE_COLORS[obra.estatusFase]}`}>
                       {obra.estatusFase}
                     </span>
@@ -191,6 +294,7 @@ export default function PipelineTab({
                   </div>
                 </div>
 
+                {/* LÍNEA 2: CLIENTE Y ÚLTIMA VISITA */}
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                   <p className="truncate font-semibold flex items-center gap-1 text-[11px]">
                     <User className="w-3 h-3 text-[#0091FB] shrink-0" />
@@ -202,6 +306,7 @@ export default function PipelineTab({
                   </span>
                 </div>
 
+                {/* LÍNEA 3: MONTOS + BOTÓN CHECK-IN RÁPIDO + EDITAR */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-3 text-xs">
                     <div>
@@ -219,7 +324,22 @@ export default function PipelineTab({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-0.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* BOTÓN CHECK-IN DIRECTO (PASAR DE 3 CLICS A 1 SOLO TOQUE) */}
+                    {onNuevaVisita && obra.estadoObra !== 'TERMINADA' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNuevaVisita(obra);
+                        }}
+                        className="h-7 px-2 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white font-black text-[11px] rounded-lg flex items-center gap-1 shadow-2xs transition-all"
+                        title="Hacer Check-in de Campo Inmediato">
+                        <Camera className="w-3 h-3" />
+                        <span>Check-in</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={(e) => {
@@ -242,7 +362,7 @@ export default function PipelineTab({
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
 
-                    <span className="text-[#0091FB] pl-1 font-bold">
+                    <span className="text-[#0091FB] pl-0.5 font-bold">
                       <ChevronRight className="w-4 h-4 stroke-[2.5]" />
                     </span>
                   </div>
@@ -272,7 +392,6 @@ export default function PipelineTab({
               </button>
             </div>
 
-            {/* Ciclo de Vida: En Proceso / Pausadas / Concluidas */}
             <div className="space-y-1.5">
               <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">Estado de la Obra</label>
               <div className="grid grid-cols-4 gap-1.5">
@@ -351,6 +470,7 @@ export default function PipelineTab({
                   setFiltroFase('TODAS');
                   setFiltroEspecial('TODAS');
                   setFiltroEstadoObra('ACTIVA');
+                  setCriterioOrden('CERCANIA');
                   setSearch('');
                   setModalFiltrosAbierto(false);
                 }}
