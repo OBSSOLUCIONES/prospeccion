@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { Navigation, Radio, Layers, Crosshair, Route, Download, Calendar, UserCheck, Building } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
-// COORDENADAS PRECISAS (VILLADIEGO CORREGIDO EN MORELIA: COL. NUEVA VALLADOLID)
+// COORDENADAS PRECISAS (VILLADIEGO EN MORELIA: COL. NUEVA VALLADOLID)
 const SUCURSAL_COORDS = {
   'ALTOZANO': [19.6642, -101.1718],
   'LA MIRA': [18.0333, -102.3167],
@@ -114,7 +114,6 @@ export default function MapaTab({
       lngFinal: parseFloat(o.lng)
     }));
 
-  // Lista dinámica de asesores filtrada según la sucursal de ruta
   const listaAsesores = useMemo(() => {
     const visitasFiltradas = sucursalRuta === 'TODAS'
       ? visitas
@@ -123,7 +122,6 @@ export default function MapaTab({
     return Array.from(new Set(nombres));
   }, [visitas, sucursalRuta]);
 
-  // Visitas para trazar la ruta filtradas por Sucursal + Asesor + Fecha
   const visitasDeRuta = useMemo(() => {
     if (!modoRutaFlotilla) return [];
     return visitas
@@ -139,7 +137,6 @@ export default function MapaTab({
 
   const puntosPolilinea = visitasDeRuta.map(v => [parseFloat(v.latGpsReal), parseFloat(v.lngGpsReal)]);
 
-  // Manejar cambio de sucursal en el mapa general
   const handleCambiarSucursal = (sucursalSeleccionada) => {
     setFiltroSucursal(sucursalSeleccionada);
     if (sucursalSeleccionada !== 'TODAS' && SUCURSAL_COORDS[sucursalSeleccionada]) {
@@ -150,7 +147,6 @@ export default function MapaTab({
     }
   };
 
-  // Manejar cambio de sucursal dentro del modo flotilla
   const handleCambiarSucursalRuta = (suc) => {
     setSucursalRuta(suc);
     setAsesorSeleccionado('TODOS');
@@ -175,7 +171,6 @@ export default function MapaTab({
     setOrdenVuelo(null);
   }, []);
 
-  // GENERAR IMAGEN PNG DE AUDITORÍA LOGÍSTICA
   const descargarImagenRuta = () => {
     if (!visitasDeRuta.length) {
       alert(`No hay visitas registradas para la sucursal ${sucursalRuta} en la fecha ${fechaRuta}.`);
@@ -187,11 +182,9 @@ export default function MapaTab({
     canvas.height = 1180;
     const ctx = canvas.getContext('2d');
 
-    // Fondo
     ctx.fillStyle = '#0B1120';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Cabecera Corporativa
     ctx.fillStyle = '#001757';
     ctx.fillRect(0, 0, canvas.width, 140);
 
@@ -207,7 +200,6 @@ export default function MapaTab({
     ctx.font = '13px Montserrat, sans-serif';
     ctx.fillText(`Total de Paradas Registradas: ${visitasDeRuta.length} puntos de supervisión`, 40, 110);
 
-    // Tarjeta Resumen
     ctx.fillStyle = '#1E293B';
     ctx.roundRect(40, 160, 820, 90, 16);
     ctx.fill();
@@ -222,7 +214,6 @@ export default function MapaTab({
     const ultimoPunto = visitasDeRuta[visitasDeRuta.length - 1]?.fecha.split(' ')[1] || '--';
     ctx.fillText(`Primer Check-in: ${primerPunto} hrs    |    Último Check-in: ${ultimoPunto} hrs`, 60, 220);
 
-    // Timeline de Paradas
     ctx.fillStyle = '#38BDF8';
     ctx.font = 'bold 16px Montserrat, sans-serif';
     ctx.fillText('SECUENCIA CRONOLÓGICA DE PARADAS (GPS AUDITADO)', 40, 290);
@@ -237,7 +228,6 @@ export default function MapaTab({
       ctx.roundRect(40, y, 820, 70, 12);
       ctx.fill();
 
-      // Círculo con número
       ctx.fillStyle = '#0091FB';
       ctx.beginPath();
       ctx.arc(75, y + 35, 18, 0, Math.PI * 2);
@@ -249,7 +239,6 @@ export default function MapaTab({
       ctx.fillText(String(index + 1), 75, y + 40);
       ctx.textAlign = 'left';
 
-      // Detalles
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 14px Montserrat, sans-serif';
       ctx.fillText(nombreObra, 110, y + 30);
@@ -265,7 +254,6 @@ export default function MapaTab({
       y += 82;
     });
 
-    // Pie de página
     ctx.fillStyle = '#64748B';
     ctx.font = '11px Montserrat, sans-serif';
     ctx.fillText('Generado por Control de Obras - Red Azul • Certificado de Auditoría Territorial', 40, 1150);
@@ -277,42 +265,40 @@ export default function MapaTab({
   };
 
   return (
-    <div className="space-y-2.5 pb-24">
+    <div className="space-y-3 pb-28">
       
-      {/* BARRA SUPERIOR DE CONTROL */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+      {/* Barra Superior de Control */}
+      <div className="bg-white/90 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/70 shadow-sm space-y-2.5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#0091FB] flex items-center justify-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-blue-50 text-[#0091FB] flex items-center justify-center border border-blue-200/60 shadow-2xs">
               <Radio className="w-4 h-4 text-[#0091FB] animate-pulse" />
             </div>
             <div>
               <p className="font-black text-[#001757] text-xs">Monitor Territorial de Obras</p>
-              <p className="text-slate-400 text-[10px] font-semibold">
+              <p className="text-slate-400 text-[10px] font-bold">
                 Obras: <strong className="text-emerald-600">{obrasConCoordenadas.length}</strong> • Clientes: <strong className="text-[#001757]">{clientesPorSucursal.length}</strong>
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
-            {/* Alternador de Modo Flotilla */}
             <button
               type="button"
               onClick={() => setModoRutaFlotilla(!modoRutaFlotilla)}
               className={`py-2 px-3 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-xs ${
                 modoRutaFlotilla 
-                  ? 'bg-[#001757] text-white' 
-                  : 'bg-blue-50 text-[#001757] border border-blue-200 hover:bg-blue-100'
+                  ? 'bg-[#001757] text-white shadow-[#001757]/20' 
+                  : 'bg-blue-50 text-[#001757] border border-blue-200/80 hover:bg-blue-100'
               }`}>
               <Route className="w-3.5 h-3.5 text-[#0091FB]" />
               <span>{modoRutaFlotilla ? 'Ver Mapa Normal' : '🚗 Rutas de Flotilla'}</span>
             </button>
 
-            {/* Selector de Sucursal del Mapa */}
             <select
               value={filtroSucursal}
               onChange={(e) => handleCambiarSucursal(e.target.value)}
-              className="py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black text-[#001757] outline-none flex-1 sm:flex-initial">
+              className="py-2 px-3 rounded-xl border border-slate-200/80 bg-slate-50 text-xs font-black text-[#001757] outline-none flex-1 sm:flex-initial cursor-pointer">
               <option value="TODAS">Todas las Sucursales</option>
               {SUCURSALES.map(s => (
                 <option key={s.codigo} value={s.nombre}>{s.nombre} ({s.codigo})</option>
@@ -321,12 +307,11 @@ export default function MapaTab({
           </div>
         </div>
 
-        {/* PANEL DE RUTAS DE FLOTILLA CON FILTRO DE SUCURSAL + ASESOR + FECHA */}
+        {/* Panel de Flotilla */}
         {modoRutaFlotilla ? (
-          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70">
             <div className="flex items-center gap-2 flex-wrap text-xs">
               
-              {/* FILTRO 1: SUCURSAL DE LA RUTA */}
               <div className="flex items-center gap-1">
                 <Building className="w-3.5 h-3.5 text-slate-400" />
                 <select
@@ -338,7 +323,6 @@ export default function MapaTab({
                 </select>
               </div>
 
-              {/* FILTRO 2: FECHA */}
               <div className="flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
                 <input
@@ -349,7 +333,6 @@ export default function MapaTab({
                 />
               </div>
 
-              {/* FILTRO 3: ASESOR DE ESA SUCURSAL */}
               <div className="flex items-center gap-1">
                 <UserCheck className="w-3.5 h-3.5 text-slate-400" />
                 <select
@@ -366,11 +349,10 @@ export default function MapaTab({
               </span>
             </div>
 
-            {/* BOTÓN DESCARGAR REPORTE PNG */}
             <button
               type="button"
               onClick={descargarImagenRuta}
-              className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 active:scale-95 transition-all">
+              className="h-8 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:brightness-105 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 active:scale-95 transition-all">
               <Download className="w-3.5 h-3.5" />
               <span>Descargar Imagen de Ruta</span>
             </button>
@@ -384,8 +366,8 @@ export default function MapaTab({
             <button
               type="button"
               onClick={() => setVerObras(!verObras)}
-              className={`text-xs px-2.5 py-1 rounded-xl font-bold transition-all ${
-                verObras ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-400 opacity-60'
+              className={`text-xs px-3 py-1 rounded-xl font-bold transition-all ${
+                verObras ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs' : 'bg-slate-100 text-slate-400 opacity-60'
               }`}>
               🏗️ Obras ({obrasConCoordenadas.length})
             </button>
@@ -393,8 +375,8 @@ export default function MapaTab({
             <button
               type="button"
               onClick={() => setVerClientes(!verClientes)}
-              className={`text-xs px-2.5 py-1 rounded-xl font-bold transition-all ${
-                verClientes ? 'bg-blue-50 text-[#001757] border border-blue-200' : 'bg-slate-100 text-slate-400 opacity-60'
+              className={`text-xs px-3 py-1 rounded-xl font-bold transition-all ${
+                verClientes ? 'bg-blue-50 text-[#001757] border border-blue-200 shadow-2xs' : 'bg-slate-100 text-slate-400 opacity-60'
               }`}>
               🏢 Clientes ({clientesPorSucursal.length})
             </button>
@@ -402,8 +384,8 @@ export default function MapaTab({
         )}
       </div>
 
-      {/* CONTENEDOR DEL MAPA */}
-      <div className="h-[68vh] w-full rounded-3xl overflow-hidden border border-slate-200 shadow-sm relative">
+      {/* Contenedor del Mapa Satelital */}
+      <div className="h-[68vh] w-full rounded-3xl overflow-hidden border border-slate-200/80 shadow-md relative">
         <MapContainer 
           center={centroInicial} 
           zoom={12} 
@@ -449,7 +431,7 @@ export default function MapaTab({
             </Marker>
           )}
 
-          {/* TRAZO DE LÍNEA DE RUTA Y PARADAS NUMERADAS */}
+          {/* Línea de Ruta de Flotilla */}
           {modoRutaFlotilla && puntosPolilinea.length > 1 && (
             <Polyline
               positions={puntosPolilinea}
@@ -474,7 +456,7 @@ export default function MapaTab({
             </Marker>
           ))}
 
-          {/* PINES DE OBRAS */}
+          {/* Pines de Obras */}
           {!modoRutaFlotilla && verObras && obrasConCoordenadas.map(obra => (
             <Marker key={`obra-${obra.id}`} position={[obra.latFinal, obra.lngFinal]} icon={obraIcon}>
               <Popup>
@@ -505,7 +487,7 @@ export default function MapaTab({
             </Marker>
           ))}
 
-          {/* PINES DE CLIENTES */}
+          {/* Pines de Clientes */}
           {!modoRutaFlotilla && verClientes && clientesPorSucursal.filter(c => c.lat && c.lng).map(c => (
             <Marker key={`cliente-${c.id}`} position={[parseFloat(c.lat), parseFloat(c.lng)]} icon={clienteIcon}>
               <Popup>
@@ -536,12 +518,17 @@ export default function MapaTab({
 
         </MapContainer>
 
-        {/* BOTÓN FLOTANTE MI UBICACIÓN */}
+        {/* BOTÓN FLOTANTE ELEVADO (SEPARADO DEL BOTTOM NAV Y SIN TEMBLORES) */}
         <button
           type="button"
-          onClick={handleCentrarMiGps}
-          className="absolute bottom-4 right-4 z-[400] bg-white text-[#001757] hover:text-[#0091FB] font-black text-xs px-3.5 py-2.5 rounded-2xl shadow-xl border border-slate-200 flex items-center gap-1.5 active:scale-95 transition-all">
-          <Crosshair className="w-4 h-4 text-[#0091FB]" />
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCentrarMiGps();
+          }}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-20 right-4 z-[400] bg-white/95 backdrop-blur-md text-[#001757] hover:text-[#0091FB] font-black text-xs px-3.5 py-2.5 rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.18)] border border-slate-200/90 flex items-center gap-1.5 active:scale-95 transition-all select-none touch-manipulation cursor-pointer"
+          title="Centrar mapa en mi posición GPS">
+          <Crosshair className="w-4 h-4 text-[#0091FB] shrink-0" />
           <span>Mi Ubicación</span>
         </button>
       </div>
