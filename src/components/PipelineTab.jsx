@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Search, SlidersHorizontal, User, ChevronRight,
   Pencil, Trash2, Building2, Snowflake, Clock, X,
-  Camera, MapPin, ArrowDownUp, Navigation, Sparkles
+  Camera, MapPin, ArrowDownUp
 } from 'lucide-react';
 import { SUCURSALES, FASES_OBRA, FASE_COLORS } from '../data/constants';
 
@@ -154,8 +154,8 @@ export default function PipelineTab({
   return (
     <div className="space-y-3.5 pb-28">
       
-      {/* Barra de Búsqueda y Filtros con Ergonomía Nativa Android */}
-      <div className="flex items-center gap-2.5">
+      {/* Barra de Búsqueda y Filtros con Adaptabilidad Elástica */}
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className="relative flex-1">
           <Search className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
           <input 
@@ -170,7 +170,7 @@ export default function PipelineTab({
         <button
           type="button"
           onClick={() => setModalFiltrosAbierto(true)}
-          className={`min-h-[44px] px-4 rounded-2xl text-xs sm:text-sm font-black flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 shadow-sm ${
+          className={`h-11 px-3.5 sm:px-4 rounded-2xl text-xs sm:text-sm font-black flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 shadow-sm ${
             filtrosActivosCount > 0 
               ? 'bg-[#001757] text-white border-[#001757]' 
               : 'bg-white text-[#001757] border-slate-300/80 hover:bg-slate-50'
@@ -185,7 +185,7 @@ export default function PipelineTab({
         </button>
       </div>
 
-      {/* Selectores de Ordenamiento Táctil de Acceso Rápido */}
+      {/* Selectores de Ordenamiento Táctil */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         <button
           type="button"
@@ -224,9 +224,9 @@ export default function PipelineTab({
         </button>
       </div>
 
-      {/* Contador de obras filtradas */}
+      {/* Contador de Obras */}
       <div className="flex items-center justify-between px-1 text-[11px] sm:text-xs font-extrabold text-slate-500">
-        <span>{obrasFiltradas.length} obras {filtroEstadoObra === 'ACTIVA' ? 'activas' : filtroEstadoObra === 'PAUSADA' ? 'pausadas' : filtroEstadoObra === 'TERMINADA' ? 'concluidas' : 'en total'}</span>
+        <span>{obrasFiltradas.length} obras {filtroEstadoObra === 'ACTIVA' ? 'activas' : filtroEstadoObra === 'PAUSADA' ? 'pausadas' : filtroEstadoObra === 'TERMINADA' ? 'concluidas' : 'totales'}</span>
         {filtroSucursal !== 'TODAS' && (
           <span className="font-black text-[#001757] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
             {filtroSucursal}
@@ -234,8 +234,12 @@ export default function PipelineTab({
         )}
       </div>
 
-      {/* Cuadrícula Adaptativa Tablet: 1 columna en móvil vertical, 2 columnas en Tablet horizontal */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* CUADRÍCULA INTELIGENTE:
+          - Celulares: 1 columna
+          - Tablets (ambas orientaciones): 2 columnas
+          - Pantallas Grandes / Monitores: 3 columnas
+      */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         {obrasFiltradas.length === 0 ? (
           <div className="col-span-full p-10 text-center bg-white rounded-3xl border border-slate-200/80 shadow-sm space-y-2">
             <Building2 className="w-10 h-10 text-slate-300 mx-auto" />
@@ -251,58 +255,58 @@ export default function PipelineTab({
               <div
                 key={obra.id}
                 onClick={() => onSeleccionarObra(obra)}
-                className="w-full bg-white hover:border-[#0091FB] active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md transition-all duration-150 space-y-3">
+                className="w-full bg-white hover:border-[#0091FB] active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md transition-all duration-150 space-y-3 flex flex-col justify-between">
                 
-                {/* Cabecera de la Tarjeta: Folio, Título, Distancia y Fase */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex items-center gap-2">
-                    <span className="font-mono font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-[11px] shrink-0 border border-slate-200">
-                      {obra.id}
-                    </span>
-                    <h3 className="text-sm sm:text-base font-black text-[#001757] tracking-tight truncate leading-snug">
-                      {obra.nombre}
-                    </h3>
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    {distanciaTexto && (
-                      <span className="text-[10px] font-black bg-blue-50 text-[#0091FB] border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
-                        <MapPin className="w-3 h-3 text-rose-500" />
-                        {distanciaTexto}
+                {/* Parte Superior */}
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className="font-mono font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-[11px] shrink-0 border border-slate-200">
+                        {obra.id}
                       </span>
-                    )}
+                      <h3 className="text-sm sm:text-base font-black text-[#001757] tracking-tight truncate leading-snug">
+                        {obra.nombre}
+                      </h3>
+                    </div>
 
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${FASE_COLORS[obra.estatusFase]}`}>
-                      {obra.estatusFase}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {distanciaTexto && (
+                        <span className="text-[10px] font-black bg-blue-50 text-[#0091FB] border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                          <MapPin className="w-3 h-3 text-rose-500" />
+                          {distanciaTexto}
+                        </span>
+                      )}
+
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${FASE_COLORS[obra.estatusFase]}`}>
+                        {obra.estatusFase}
+                      </span>
+
+                      {obra.estadoObra === 'PAUSADA' ? (
+                        <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded">Pausada</span>
+                      ) : obra.estadoObra === 'TERMINADA' ? (
+                        <span className="text-[10px] font-black bg-slate-100 text-slate-700 px-2 py-0.5 rounded">Concluida</span>
+                      ) : obra.diasSinVisita === 0 ? (
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" title="Visitada Hoy" />
+                      ) : esFria ? (
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)]" title={`Hace ${obra.diasSinVisita} días`} />
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <p className="truncate font-bold flex items-center gap-1.5 text-xs text-slate-700">
+                      <User className="w-3.5 h-3.5 text-[#0091FB] shrink-0" />
+                      <span className="truncate">{obra.cliente ? obra.cliente.nombreCliente : 'Sin cliente asignado'}</span>
+                    </p>
+
+                    <span className="text-[11px] text-slate-500 font-bold shrink-0">
+                      {obra.diasSinVisita === 0 ? 'Visitada hoy' : `Hace ${obra.diasSinVisita}d`} • {obra.sucursal}
                     </span>
-
-                    {obra.estadoObra === 'PAUSADA' ? (
-                      <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded">Pausada</span>
-                    ) : obra.estadoObra === 'TERMINADA' ? (
-                      <span className="text-[10px] font-black bg-slate-100 text-slate-700 px-2 py-0.5 rounded">Concluida</span>
-                    ) : obra.diasSinVisita === 0 ? (
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" title="Visitada Hoy" />
-                    ) : esFria ? (
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)]" title={`Hace ${obra.diasSinVisita} días`} />
-                    ) : null}
                   </div>
                 </div>
 
-                {/* Cliente y Días sin Visita */}
-                <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                  <p className="truncate font-bold flex items-center gap-1.5 text-xs text-slate-700">
-                    <User className="w-3.5 h-3.5 text-[#0091FB] shrink-0" />
-                    <span className="truncate">{obra.cliente ? obra.cliente.nombreCliente : 'Sin cliente asignado'}</span>
-                  </p>
-
-                  <span className="text-[11px] text-slate-500 font-bold shrink-0">
-                    {obra.diasSinVisita === 0 ? 'Visitada hoy' : `Hace ${obra.diasSinVisita}d`} • {obra.sucursal}
-                  </span>
-                </div>
-
-                {/* Balance Comercial y Botones de Acción Inmediata (Ergonomía Nativa) */}
+                {/* Parte Inferior: Balance y Botones */}
                 <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
-                  
                   <div className="flex items-center gap-3">
                     <div>
                       <span className="text-[10px] uppercase font-black text-slate-400 block leading-none">Cotizado</span>
@@ -319,7 +323,6 @@ export default function PipelineTab({
                     </div>
                   </div>
 
-                  {/* Acciones de 1 toque: Check-in + Editar + Abrir */}
                   <div className="flex items-center gap-1.5 shrink-0">
                     {onNuevaVisita && obra.estadoObra !== 'TERMINADA' && (
                       <button
@@ -328,7 +331,7 @@ export default function PipelineTab({
                           e.stopPropagation();
                           onNuevaVisita(obra);
                         }}
-                        className="min-h-[38px] px-3 bg-gradient-to-r from-[#0091FB] to-[#007be0] hover:brightness-105 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm shadow-[#0091FB]/30 transition-all"
+                        className="h-9 px-3 bg-gradient-to-r from-[#0091FB] to-[#007be0] hover:brightness-105 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm shadow-[#0091FB]/30 transition-all"
                         title="Check-in Inmediato">
                         <Camera className="w-4 h-4 stroke-[2.4]" />
                         <span>Check-in</span>
@@ -357,7 +360,7 @@ export default function PipelineTab({
                       <Trash2 className="w-4 h-4" />
                     </button>
 
-                    <span className="text-[#0091FB] pl-1 font-bold">
+                    <span className="text-[#0091FB] pl-0.5 font-bold">
                       <ChevronRight className="w-5 h-5 stroke-[2.5]" />
                     </span>
                   </div>
@@ -372,9 +375,8 @@ export default function PipelineTab({
       {/* Modal de Filtros con Estilo Bottom Sheet */}
       {modalFiltrosAbierto && (
         <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-          <div className="w-full sm:max-w-md bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto border border-slate-200">
+          <div className="w-full sm:max-w-md bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85dvh] overflow-y-auto border border-slate-200">
             
-            {/* Tirador táctil estilo Bottom Sheet */}
             <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden" />
 
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">

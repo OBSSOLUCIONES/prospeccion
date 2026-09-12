@@ -74,7 +74,6 @@ function formatearFechaParaPowerBI(fechaStr) {
   return { fecha_corta: fechaCorta, id_fecha: idFecha, hora, iso };
 }
 
-// FUNCIÓN SANITIZADORA UNIVERSAL: Convierte a MAYÚSCULAS protegiendo URLs, fotos y números
 function sanitizarAMayusculas(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   const camposExcluidos = [
@@ -101,7 +100,6 @@ export default function App() {
   const [tab, setTab] = useState('pipeline');
   const [mostrarSplash, setMostrarSplash] = useState(true);
   
-  // Estados de conectividad y cola offline
   const [estaOnline, setEstaOnline] = useState(navigator.onLine);
   const [pendientesOffline, setPendientesOffline] = useState(0);
 
@@ -177,7 +175,6 @@ export default function App() {
     itemAEliminar
   );
 
-  // Detección de proximidad inteligente a obras (<180m)
   const obraProxima = useMemo(() => {
     if (esDirector || !tabletPos?.lat || !tabletPos?.lng) return null;
     for (const o of obras) {
@@ -190,13 +187,11 @@ export default function App() {
     return null;
   }, [tabletPos, obras, esDirector]);
 
-  // Actualizar conteo de cola offline
   const refrescarConteoOffline = useCallback(async () => {
     const cant = await contarItemsColaOffline();
     setPendientesOffline(cant);
   }, []);
 
-  // Forzar sincronización manual de la cola
   const ejecutarSincronizacionOffline = useCallback(async () => {
     if (!navigator.onLine) return;
     setSincronizando(true);
@@ -210,7 +205,6 @@ export default function App() {
     }
   }, [refrescarConteoOffline]);
 
-  // Monitoreo de conectividad en vivo
   useEffect(() => {
     const manejarOnline = () => {
       setEstaOnline(true);
@@ -232,7 +226,6 @@ export default function App() {
     };
   }, [ejecutarSincronizacionOffline, refrescarConteoOffline]);
 
-  // Sincronización en la nube al abrir
   const recargarDatosNube = useCallback(async () => {
     if (!isSupabaseConfigured || !navigator.onLine) return;
     try {
@@ -280,7 +273,6 @@ export default function App() {
     }
   }, [recargarDatosNube, esDirector]);
 
-  // Persistencia local permanente
   useEffect(() => { localStorage.setItem('app_obras_maestras', JSON.stringify(obras)); }, [obras]);
   useEffect(() => { localStorage.setItem('app_obras_bitacora_visitas', JSON.stringify(visitas)); }, [visitas]);
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
@@ -295,7 +287,6 @@ export default function App() {
     }
   }, [usuarioActivo]);
 
-  // GPS en segundo plano para auditoría de campo
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGpsEstado('bloqueado');
@@ -333,10 +324,8 @@ export default function App() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [usuarioActivo]);
 
-  // GUARDAR OBRA (100% EN MAYÚSCULAS)
   const handleGuardarObra = async (nuevaObra) => {
     const obraLimpia = sanitizarAMayusculas(nuevaObra);
-
     if (obraAEditar) {
       setObras(prev => prev.map(o => o.id === obraAEditar.id ? obraLimpia : o));
       if (obraSeleccionada && obraSeleccionada.id === obraLimpia.id) setObraSeleccionada(obraLimpia);
@@ -348,10 +337,8 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // GUARDAR CLIENTE (100% EN MAYÚSCULAS)
   const handleGuardarCliente = async (nuevoCliente) => {
     const clienteLimpio = sanitizarAMayusculas(nuevoCliente);
-
     if (clienteAEditar) {
       setClientes(prev => prev.map(c => c.id === clienteAEditar.id ? clienteLimpio : c));
       setClienteAEditar(null);
@@ -382,10 +369,8 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // GUARDAR VISITA (100% EN MAYÚSCULAS)
   const handleGuardarVisita = async (nuevaVisita) => {
     const visitaLimpia = sanitizarAMayusculas(nuevaVisita);
-
     setVisitas(prev => [visitaLimpia, ...prev]);
     setObras(prev => prev.map(o => {
       if (o.id === visitaLimpia.obraId) {
@@ -401,10 +386,8 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // GUARDAR MOVIMIENTO (100% EN MAYÚSCULAS)
   const handleGuardarMovimiento = async (nuevoMov) => {
     const movLimpio = sanitizarAMayusculas(nuevoMov);
-
     setMovimientos(prev => {
       const existe = prev.some(m => m.id === movLimpio.id);
       if (existe) return prev.map(m => m.id === movLimpio.id ? movLimpio : m);
@@ -431,7 +414,6 @@ export default function App() {
     }
   };
 
-  // Exportador Power BI para Dirección
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -443,7 +425,6 @@ export default function App() {
       ? clientes
       : clientes.filter(c => c.sucursal === filtroSucursal);
 
-    // 1. Dim_Clientes
     const hojaClientes = clientesAExportar.map(c => {
       const obrasCliente = obras.filter(o => o.clienteId === c.id);
       const obrasIds = obrasCliente.map(o => o.id);
@@ -476,7 +457,6 @@ export default function App() {
       };
     });
 
-    // 2. Dim_Obras
     const hojaObras = obrasAExportar.map(o => {
       const cli = clientes.find(c => c.id === o.clienteId);
       const visObra = visitas.filter(v => v.obraId === o.id);
@@ -517,7 +497,6 @@ export default function App() {
       };
     });
 
-    // 3. Fact_Visitas
     const hojaVisitas = visitas
       .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
       .map(v => {
@@ -542,7 +521,6 @@ export default function App() {
         };
       });
 
-    // 4. Fact_Movimientos
     const obrasIdsValidas = obrasAExportar.map(o => o.id);
     const hojaMovimientos = movimientos
       .filter(m => obrasIdsValidas.includes(m.obraId))
@@ -590,20 +568,20 @@ export default function App() {
     return diff > 12;
   }).length;
 
-  // 1. Splash Screen Cinemático Inicial
+  // 1. Splash Screen
   if (mostrarSplash) {
     return <SplashScreen onFinish={() => setMostrarSplash(false)} />;
   }
 
-  // 2. Pantalla de Acceso por PIN
+  // 2. PIN
   if (!usuarioActivo) {
     return <PantallaPin usuarios={usuarios} onLogin={(u) => setUsuarioActivo(u)} />;
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[62px] sm:pt-[70px] font-sans">
+    <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[58px] sm:pt-[70px] font-sans">
       
-      {/* HEADER CON TELEMETRÍA OFFLINE / ONLINE */}
+      {/* HEADER ELÁSTICO */}
       <Header 
         gpsEstado={gpsEstado} 
         tabletPos={tabletPos} 
@@ -619,37 +597,39 @@ export default function App() {
         onForzarSincronizacion={ejecutarSincronizacionOffline}
       />
 
-      {/* DYNAMIC ISLAND: ALERTA INTELIGENTE CUANDO LLEGAS A UNA OBRA */}
+      {/* DYNAMIC ISLAND (Centrado universal hasta 7XL) */}
       {obraProxima && !algunModalAbierto && (
-        <div className="mx-3.5 mb-2.5 p-3.5 bg-[#000b26]/95 text-white rounded-3xl shadow-[0_12px_36px_rgba(0,11,38,0.3)] border border-slate-700/60 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
-          <div className="min-w-0 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-              <MapPin className="w-5 h-5 animate-pulse" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 mb-2.5">
+          <div className="p-3.5 bg-[#000b26]/95 text-white rounded-3xl shadow-lg border border-slate-700/60 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-200">
+            <div className="min-w-0 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <MapPin className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                  📍 Estás en la obra ({obraProxima.distancia}m)
+                </span>
+                <h4 className="text-xs sm:text-sm font-black truncate text-white mt-0.5">{obraProxima.obra.nombre}</h4>
+                <p className="text-[10px] text-slate-400 truncate">{obraProxima.obra.sucursal} • {obraProxima.obra.estatusFase}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                📍 Estás en la obra ({obraProxima.distancia}m)
-              </span>
-              <h4 className="text-xs sm:text-sm font-black truncate text-white mt-0.5">{obraProxima.obra.nombre}</h4>
-              <p className="text-[10px] text-slate-400 truncate">{obraProxima.obra.sucursal} • {obraProxima.obra.estatusFase}</p>
-            </div>
-          </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setObraParaVisita(obraProxima.obra);
-              setModalVisitaAbierto(true);
-            }}
-            className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-105 active:scale-95 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-md shadow-emerald-500/30 shrink-0 transition-all flex items-center gap-1.5">
-            <Zap className="w-4 h-4 fill-slate-950" />
-            <span>Check-in</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setObraParaVisita(obraProxima.obra);
+                setModalVisitaAbierto(true);
+              }}
+              className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-105 active:scale-95 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-md shrink-0 transition-all flex items-center gap-1.5">
+              <Zap className="w-4 h-4 fill-slate-950" />
+              <span>Check-in</span>
+            </button>
+          </div>
         </div>
       )}
 
-      {/* CONTENIDO PRINCIPAL SCROLLEABLE */}
-      <main className="w-full px-3.5 py-1 space-y-3">
+      {/* CONTENEDOR MAESTRO: Ajusta el ancho automáticamente a celular, tablet o monitor */}
+      <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1 space-y-3">
         {tab === 'pipeline' && (
           <PipelineTab 
             obras={obras}
@@ -707,7 +687,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Botón Flotante Elevado (Oculto para el Director) */}
+      {/* Botón Flotante (Se ajusta al margen derecho del dispositivo) */}
       {!algunModalAbierto && !esDirector && (
         <button
           type="button"
@@ -720,16 +700,16 @@ export default function App() {
               setModalObraAbierto(true);
             }
           }}
-          className="fixed bottom-24 right-4 z-30 bg-gradient-to-r from-[#001757] via-[#00227a] to-[#0091FB] hover:brightness-105 active:scale-95 text-white px-5 py-3.5 rounded-3xl shadow-[0_12px_32px_-4px_rgba(0,11,38,0.45)] flex items-center gap-2 font-black text-xs sm:text-sm transition-all border border-white/20">
+          className="fixed bottom-24 right-4 sm:right-8 lg:right-12 z-30 bg-gradient-to-r from-[#001757] via-[#00227a] to-[#0091FB] hover:brightness-105 active:scale-95 text-white px-5 py-3.5 rounded-3xl shadow-xl flex items-center gap-2 font-black text-xs sm:text-sm transition-all border border-white/20">
           {tab === 'clientes' ? <UserPlus className="w-5 h-5 stroke-[2.4]" /> : <Building2 className="w-5 h-5 stroke-[2.4]" />}
           <span>{tab === 'clientes' ? '+ Nuevo Cliente' : '+ Nueva Obra'}</span>
         </button>
       )}
 
-      {/* BARRA DE NAVEGACIÓN INFERIOR NATIVA ANDROID */}
+      {/* Barra Inferior */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* Panel de Metas y Rendimiento */}
+      {/* Panel de Metas */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
@@ -777,7 +757,7 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
-      {/* Alta / Edición de Obra */}
+      {/* Modal Obra */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -790,7 +770,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* Alta / Edición de Cliente */}
+      {/* Modal Cliente */}
       <ModalCliente
         isOpen={modalCliente}
         onClose={() => { setModalCliente(false); setClienteAEditar(null); }}
@@ -802,7 +782,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* Check-in de Visita */}
+      {/* Modal Visita */}
       <ModalVisita
         isOpen={modalVisitaAbierto}
         onClose={() => { setModalVisitaAbierto(false); setObraParaVisita(null); }}
@@ -812,7 +792,7 @@ export default function App() {
         usuarioActivo={usuarioActivo}
       />
 
-      {/* Cotización o Venta */}
+      {/* Modal Comercial */}
       <ModalComercial
         isOpen={modalComercialAbierto}
         onClose={() => { setModalComercialAbierto(false); setConfigComercial(null); }}
@@ -821,7 +801,7 @@ export default function App() {
         onSave={handleGuardarMovimiento}
       />
 
-      {/* Selector GPS */}
+      {/* Modal Mapa Picker */}
       {mapaPickerConfig && (
         <ModalMapaPicker 
           isOpen={true}
@@ -835,7 +815,7 @@ export default function App() {
         />
       )}
 
-      {/* Navegación GPS */}
+      {/* Modal Navegación */}
       <ModalNavegacion 
         isOpen={Boolean(destinoRuta)}
         onClose={() => setDestinoRuta(null)}
@@ -848,7 +828,7 @@ export default function App() {
         onClose={() => setVisorModal(null)}
       />
 
-      {/* Confirmación de Borrado */}
+      {/* Confirmación Borrado */}
       {itemAEliminar && (
         <div className="fixed inset-0 z-[110] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200">
