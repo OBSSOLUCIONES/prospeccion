@@ -1,13 +1,69 @@
-import React from 'react';
-import { X, MapPin, Check } from 'lucide-react';
+// src/components/ModalCliente.jsx
+import React, { useState, useEffect } from 'react';
+import { X, MapPin, Check, Phone, Mail, Building2, User } from 'lucide-react';
 import { SUCURSALES, CAT_TIPO_CLIENTE } from '../data/constants';
 
 export default function ModalCliente({ 
-  isOpen, onClose, onSave, clientes, onAbrirMapaPicker, formCliente, setFormCliente, clienteAEditar, usuarioActivo 
+  isOpen, 
+  onClose, 
+  onSave, 
+  clientes = [], 
+  clienteAEditar, 
+  onAbrirMapaPicker,
+  tabletPos, 
+  usuarioActivo 
 }) {
+  const [form, setForm] = useState({
+    sucursal: 'ALTOZANO',
+    nombreCliente: '',
+    tipoCliente: 'PROSPECTO',
+    tipoMercado: '',
+    responsable: '',
+    contacto: '',
+    correo: '',
+    idRedAzul: '',
+    direccion: '',
+    lat: null,
+    lng: null
+  });
+
+  // Inicialización limpia e independiente
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (clienteAEditar) {
+      setForm({
+        ...clienteAEditar,
+        tipoCliente: clienteAEditar.tipoCliente || 'PROSPECTO',
+        tipoMercado: clienteAEditar.tipoMercado || '',
+        contacto: clienteAEditar.contacto || '',
+        correo: clienteAEditar.correo || '',
+        idRedAzul: clienteAEditar.idRedAzul || ''
+      });
+    } else {
+      const sucursalDefault = (usuarioActivo && usuarioActivo.sucursal !== 'TODAS') 
+        ? usuarioActivo.sucursal 
+        : 'ALTOZANO';
+
+      setForm({
+        sucursal: sucursalDefault,
+        nombreCliente: '',
+        tipoCliente: 'PROSPECTO',
+        tipoMercado: '',
+        responsable: usuarioActivo?.nombre || '',
+        contacto: '',
+        correo: '',
+        idRedAzul: '',
+        direccion: '',
+        lat: tabletPos?.lat || 19.6642,
+        lng: tabletPos?.lng || -101.1718
+      });
+    }
+  }, [isOpen, clienteAEditar]);
+
   if (!isOpen) return null;
 
-  const sucursalObj = SUCURSALES.find(s => s.nombre === formCliente.sucursal) || SUCURSALES[0];
+  const sucursalObj = SUCURSALES.find(s => s.nombre === form.sucursal) || SUCURSALES[0];
   const existentes = clientes.filter(c => c.id && c.id.startsWith(sucursalObj.codigo)).length;
   const idMostrado = clienteAEditar ? clienteAEditar.id : `${sucursalObj.codigo}${String(existentes + 1).padStart(2, '0')}`;
 
@@ -15,176 +71,194 @@ export default function ModalCliente({
     e.preventDefault();
     onSave({
       id: idMostrado,
-      ...formCliente,
-      ubicacion: formCliente.lat && formCliente.lng
-        ? `https://maps.google.com/?q=${formCliente.lat},${formCliente.lng}`
-        : ''
+      ...form,
+      ubicacion: form.lat && form.lng ? `https://maps.google.com/?q=${form.lat},${form.lng}` : ''
     });
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="w-full sm:max-w-xl max-h-[92vh] bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
+    <div className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
         
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-          <div>
+        {/* CABECERA HOMOLOGADA */}
+        <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="min-w-0 pr-2">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-base font-black text-[#001757] tracking-tight">
                 {clienteAEditar ? 'Editar Cliente' : 'Alta de Cliente'}
               </h2>
-              <span className="bg-blue-600 text-white font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg">
+              <span className="bg-[#0091FB] text-white font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg">
                 {idMostrado}
               </span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              {clienteAEditar ? 'Modificando datos del cliente' : 'Catálogo Maestro de Clientes'}
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+              {clienteAEditar ? 'Modificando datos del cliente' : 'Catálogo maestro de constructores y clientes'}
             </p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">
-            <X className="w-4 h-4" />
+
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="w-9 h-9 rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center shrink-0">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="overflow-y-auto py-3 space-y-3 text-xs pr-1">
+        <form id="form-cliente" onSubmit={handleSubmit} className="overflow-y-auto p-4 space-y-3.5 text-xs">
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
+          {/* BLOQUE 1: SUCURSAL E ID RED AZUL */}
+          <div className="grid grid-cols-2 gap-2 bg-blue-50/60 p-3 rounded-2xl border border-blue-100">
             <div>
-              <label className="block font-bold text-blue-950 mb-1">Sucursal *</label>
-              <select 
-                value={formCliente.sucursal}
+              <label className="block font-black text-[#001757] mb-1">Sucursal *</label>
+              <select
+                value={form.sucursal}
                 disabled={Boolean(clienteAEditar || (usuarioActivo && usuarioActivo.sucursal !== 'TODAS'))}
-                onChange={(e) => setFormCliente({...formCliente, sucursal: e.target.value})}
-                className="w-full p-2.5 rounded-xl border border-blue-200 bg-white font-bold text-slate-800 text-xs outline-none disabled:bg-slate-100 disabled:text-slate-500">
+                onChange={(e) => setForm(prev => ({ ...prev, sucursal: e.target.value }))}
+                className="w-full h-10 px-2.5 rounded-xl border border-blue-200 bg-white font-bold text-slate-800 text-xs outline-none disabled:bg-slate-100">
                 {SUCURSALES.map(s => <option key={s.codigo} value={s.nombre}>{s.nombre} ({s.codigo})</option>)}
               </select>
             </div>
+
             <div>
-              <label className="block font-bold text-blue-950 mb-1">ID Red Azul</label>
+              <label className="block font-black text-[#001757] mb-1">ID Red Azul</label>
               <input 
-                type="text" value={formCliente.idRedAzul}
-                onChange={(e) => setFormCliente({...formCliente, idRedAzul: e.target.value})}
+                type="text"
+                value={form.idRedAzul}
+                onChange={(e) => setForm(prev => ({ ...prev, idRedAzul: e.target.value }))}
                 placeholder="Ej. RA-1029"
-                className="w-full p-2.5 rounded-xl border border-blue-200 bg-white text-xs outline-none"
+                className="w-full h-10 px-3 rounded-xl border border-blue-200 bg-white font-bold text-slate-800 text-xs outline-none"
               />
             </div>
           </div>
 
+          {/* BLOQUE 2: NOMBRE DEL CLIENTE / EMPRESA */}
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Nombre del Cliente / Empresa *</label>
+            <label className="block font-bold text-slate-800 mb-1">Nombre del Cliente / Razón Social *</label>
             <input 
               type="text" required
-              value={formCliente.nombreCliente}
-              onChange={(e) => setFormCliente({...formCliente, nombreCliente: e.target.value})}
-              placeholder="Ej. Constructora del Centro S.A."
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              value={form.nombreCliente}
+              onChange={(e) => setForm(prev => ({ ...prev, nombreCliente: e.target.value }))}
+              placeholder="Ej. Constructora del Centro S.A. de C.V."
+              className="w-full h-11 px-3.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-900 outline-none focus:border-[#0091FB]"
             />
+          </div>
+
+          {/* BLOQUE 3: TIPO DE CLIENTE (PÍLDORAS TÁCTILES) */}
+          <div className="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-1.5">
+            <label className="block font-black text-slate-700 text-[11px] uppercase tracking-wider">
+              Clasificación de Cliente *
+            </label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {CAT_TIPO_CLIENTE.map(tc => (
+                <button
+                  key={tc}
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, tipoCliente: tc }))}
+                  className={`py-2 rounded-xl text-xs font-black border transition-all ${
+                    form.tipoCliente === tc
+                      ? 'bg-[#001757] text-white border-[#001757] shadow-xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  {tc}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* BLOQUE 4: CONTACTO, RESPONSABLE Y MERCADO */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block font-bold text-slate-800 mb-1">Encargado / Contacto *</label>
+              <input 
+                type="text" required
+                value={form.responsable}
+                onChange={(e) => setForm(prev => ({ ...prev, responsable: e.target.value }))}
+                placeholder="Ej. Ing. Carlos Salinas"
+                className="w-full h-11 px-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 outline-none focus:border-[#0091FB]"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-800 mb-1">Teléfono (WhatsApp)</label>
+              <input 
+                type="tel"
+                value={form.contacto}
+                onChange={(e) => setForm(prev => ({ ...prev, contacto: e.target.value }))}
+                placeholder="443-123-4567"
+                className="w-full h-11 px-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 outline-none focus:border-[#0091FB]"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Tipo de Cliente *</label>
-              <select 
-                value={formCliente.tipoCliente}
-                onChange={(e) => setFormCliente({...formCliente, tipoCliente: e.target.value})}
-                className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-800 text-xs outline-none">
-                {CAT_TIPO_CLIENTE.map(tc => <option key={tc} value={tc}>{tc}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Tipo de Mercado</label>
+              <label className="block font-bold text-slate-800 mb-1">Correo Electrónico</label>
               <input 
-                type="text" value={formCliente.tipoMercado}
-                onChange={(e) => setFormCliente({...formCliente, tipoMercado: e.target.value})}
-                placeholder="Residencial, Comercial..."
-                className="w-full p-2.5 rounded-xl border border-slate-200 text-xs outline-none"
+                type="email"
+                value={form.correo}
+                onChange={(e) => setForm(prev => ({ ...prev, correo: e.target.value }))}
+                placeholder="contacto@empresa.com"
+                className="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 outline-none focus:border-[#0091FB]"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-800 mb-1">Tipo de Mercado</label>
+              <input 
+                type="text"
+                value={form.tipoMercado}
+                onChange={(e) => setForm(prev => ({ ...prev, tipoMercado: e.target.value }))}
+                placeholder="Residencial, Industrial..."
+                className="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 outline-none focus:border-[#0091FB]"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Nombre del Responsable *</label>
-              <input 
-                type="text" required
-                value={formCliente.responsable}
-                onChange={(e) => setFormCliente({...formCliente, responsable: e.target.value})}
-                placeholder="Ej. Ing. Carlos Salinas"
-                className="w-full p-2.5 rounded-xl border border-slate-200 text-xs outline-none"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Contacto (Teléfono)</label>
-              <input 
-                type="tel" value={formCliente.contacto}
-                onChange={(e) => setFormCliente({...formCliente, contacto: e.target.value})}
-                placeholder="443-123-4567"
-                className="w-full p-2.5 rounded-xl border border-slate-200 text-xs outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Correo Electrónico</label>
-            <input 
-              type="email" value={formCliente.correo}
-              onChange={(e) => setFormCliente({...formCliente, correo: e.target.value})}
-              placeholder="contacto@empresa.com"
-              className="w-full p-2 rounded-xl border border-slate-200 text-xs outline-none"
-            />
-          </div>
-
-          {/* DIRECCIÓN Y GEOLOCALIZACIÓN: 100% AUTOMÁTICA VÍA MAPA */}
+          {/* BLOQUE 5: GEOLOCALIZACIÓN Y DIRECCIÓN (EXACTAMENTE IGUAL A OBRA) */}
           <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block font-bold text-slate-800">Dirección y Geolocalización *</label>
-              {formCliente.lat && formCliente.lng && (
-                <span className="text-[10px] font-mono text-slate-500">
-                  {formCliente.lat.toFixed(4)}, {formCliente.lng.toFixed(4)}
+              <label className="font-bold text-slate-900 text-xs">Ubicación y Dirección Fiscal/Oficina *</label>
+              {form.lat && form.lng && (
+                <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                  {Number(form.lat).toFixed(4)}, {Number(form.lng).toFixed(4)}
                 </span>
               )}
             </div>
 
-            {formCliente.ubicacionConfirmada || formCliente.direccion ? (
-              <div className="bg-white p-3 rounded-xl border border-emerald-200 space-y-2">
-                <div className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider">
-                      Ubicación Verificada en Mapa
-                    </p>
-                    <p className="text-xs font-semibold text-slate-800 leading-snug mt-0.5">
-                      {formCliente.direccion || 'Ubicación seleccionada en el mapa'}
-                    </p>
-                  </div>
-                </div>
+            <p className="text-xs font-semibold text-slate-800 bg-white p-2.5 rounded-xl border border-slate-200 leading-snug">
+              {form.direccion || 'Toca el botón para fijar la ubicación en el mapa'}
+            </p>
 
-                <button
-                  type="button"
-                  onClick={onAbrirMapaPicker}
-                  className="w-full py-2 px-3 rounded-lg font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center gap-1.5 transition-colors">
-                  <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Cambiar ubicación en el mapa</span>
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onAbrirMapaPicker}
-                className="w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 active:scale-98 transition-all shadow-xs">
-                <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
-                <span className="text-xs">Tocar para fijar ubicación en el mapa</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                onAbrirMapaPicker({
+                  initialPos: form.lat && form.lng ? { lat: form.lat, lng: form.lng } : tabletPos,
+                  onConfirm: ({ lat, lng, direccion }) => {
+                    setForm(prev => ({ ...prev, lat, lng, direccion: direccion || prev.direccion }));
+                  }
+                });
+              }}
+              className="w-full h-11 bg-white hover:bg-slate-50 active:scale-98 border border-blue-200 rounded-xl text-xs font-black text-[#001757] flex items-center justify-center gap-2 shadow-xs transition-all">
+              <MapPin className="w-4 h-4 text-rose-500" />
+              <span>🗺️ Seleccionar ubicación en el mapa</span>
+            </button>
           </div>
 
-          <button 
-            type="submit" 
-            className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all active:scale-98">
-            {clienteAEditar ? 'Actualizar Cliente' : `Guardar en Catálogo (${idMostrado})`}
-          </button>
-
         </form>
+
+        {/* BOTÓN INFERIOR HOMOLOGADO */}
+        <div className="p-3.5 bg-white border-t border-slate-100 shrink-0">
+          <button
+            type="submit"
+            form="form-cliente"
+            className="w-full h-12 rounded-2xl bg-[#0091FB] hover:bg-[#007be0] active:scale-98 text-white font-black text-sm shadow-md shadow-[#0091FB]/25 transition-all flex items-center justify-center gap-2">
+            <Check className="w-5 h-5 stroke-[3]" />
+            <span>{clienteAEditar ? 'Guardar Cambios del Cliente' : `Guardar Cliente (${idMostrado})`}</span>
+          </button>
+        </div>
+
       </div>
     </div>
   );

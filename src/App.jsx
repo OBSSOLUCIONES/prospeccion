@@ -37,7 +37,6 @@ import {
   eliminarObraDB,
   obtenerMovimientosDB,
   guardarMovimientoDB,
-  eliminarMovimientoDB,
   obtenerUsuariosDB,
   transmitirPosicionDB,
   obtenerPosicionesEnVivoDB,
@@ -106,20 +105,6 @@ export default function App() {
   const [mapaPickerConfig, setMapaPickerConfig] = useState(null);
   const [destinoRuta, setDestinoRuta] = useState(null);
 
-  const [formCliente, setFormCliente] = useState({
-    sucursal: 'ALTOZANO',
-    nombreCliente: '',
-    tipoMercado: '',
-    responsable: '',
-    contacto: '',
-    direccion: '',
-    correo: '',
-    tipoCliente: 'PROSPECTO',
-    idRedAzul: '',
-    lat: null,
-    lng: null
-  });
-
   const esDirector = usuarioActivo?.rol === 'admin' || usuarioActivo?.sucursal === 'TODAS';
 
   const algunModalAbierto = Boolean(
@@ -134,7 +119,7 @@ export default function App() {
     itemAEliminar
   );
 
-  // Sincronización con Supabase en la nube al arrancar
+  // Sincronización nube
   useEffect(() => {
     async function sincronizarConNube() {
       if (!isSupabaseConfigured) return;
@@ -171,7 +156,7 @@ export default function App() {
     }
   }, [esDirector]);
 
-  // Persistencia Local
+  // Persistencia local
   useEffect(() => { localStorage.setItem('app_obras_maestras', JSON.stringify(obras)); }, [obras]);
   useEffect(() => { localStorage.setItem('app_obras_bitacora_visitas', JSON.stringify(visitas)); }, [visitas]);
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
@@ -224,7 +209,7 @@ export default function App() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [usuarioActivo]);
 
-  // Handlers con guardado en la nube
+  // Handlers Obras
   const handleGuardarObra = async (nuevaObra) => {
     try { await guardarObraDB(nuevaObra); } catch {}
 
@@ -234,6 +219,18 @@ export default function App() {
       setObraAEditar(null);
     } else {
       setObras(prev => [nuevaObra, ...prev]);
+    }
+  };
+
+  // Handlers Clientes
+  const handleGuardarCliente = async (nuevoCliente) => {
+    try { await guardarClienteDB(nuevoCliente); } catch {}
+
+    if (clienteAEditar) {
+      setClientes(prev => prev.map(c => c.id === clienteAEditar.id ? nuevoCliente : c));
+      setClienteAEditar(null);
+    } else {
+      setClientes(prev => [nuevoCliente, ...prev]);
     }
   };
 
@@ -293,7 +290,6 @@ export default function App() {
     }
   };
 
-  // REPORTE A EXCEL PARA POWER BI
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -301,7 +297,6 @@ export default function App() {
       ? obras
       : obras.filter(o => o.sucursal === filtroSucursal);
 
-    // Hoja 1: Resumen Maestro de Obras con Estado Operativo
     const hojaResumen = obrasAExportar.map(obra => {
       const cli = clientes.find(c => c.id === obra.clienteId);
       const visitasObra = visitas.filter(v => v.obraId === obra.id);
@@ -332,7 +327,6 @@ export default function App() {
       };
     });
 
-    // Hoja 2: Bitácora Detallada de Visitas
     const hojaVisitas = visitas.map(v => {
       const obra = obras.find(o => o.id === v.obraId);
       return {
@@ -349,7 +343,6 @@ export default function App() {
       };
     });
 
-    // Hoja 3: Control Comercial con Trazabilidad de Cotizaciones a Ventas
     const hojaComercial = movimientos.map(m => {
       const obra = obras.find(o => o.id === m.obraId);
       const esVenta = m.tipo === 'VENTA';
@@ -382,7 +375,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 pb-24">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 pb-24 font-sans">
       
       <Header 
         gpsEstado={gpsEstado} 
@@ -419,22 +412,12 @@ export default function App() {
             clientes={clientes}
             onNuevoCliente={() => {
               setClienteAEditar(null);
-              setFormCliente({
-                sucursal: usuarioActivo.sucursal === 'TODAS' ? 'ALTOZANO' : usuarioActivo.sucursal,
-                nombreCliente: '',
-                tipoMercado: '',
-                responsable: usuarioActivo.nombre,
-                contacto: '',
-                direccion: '',
-                correo: '',
-                tipoCliente: 'PROSPECTO',
-                idRedAzul: '',
-                lat: null,
-                lng: null
-              });
               setModalCliente(true);
             }}
-            onEditarCliente={(c) => { setClienteAEditar(c); setFormCliente(c); setModalCliente(true); }}
+            onEditarCliente={(c) => { 
+              setClienteAEditar(c); 
+              setModalCliente(true); 
+            }}
             onEliminarCliente={(c) => setItemAEliminar({ tipo: 'cliente', data: c })}
             onAbrirRuta={setDestinoRuta}
           />
@@ -467,7 +450,7 @@ export default function App() {
           }}
           className="fixed bottom-20 right-4 z-30 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white p-4 rounded-2xl shadow-xl shadow-[#0091FB]/30 flex items-center gap-2 font-black text-sm transition-all">
           {tab === 'clientes' ? <UserPlus className="w-5 h-5 stroke-[2.5]" /> : <Building2 className="w-5 h-5 stroke-[2.5]" />}
-          <span>{tab === 'clientes' ? 'Nuevo Cliente' : '+ Nueva Obra'}</span>
+          <span>{tab === 'clientes' ? '+ Nuevo Cliente' : '+ Nueva Obra'}</span>
         </button>
       )}
 
@@ -502,7 +485,7 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
-      {/* CREAR / EDITAR OBRA */}
+      {/* CREAR / EDITAR OBRA (ESTABILIZADO SIN RESETEOS) */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -510,6 +493,18 @@ export default function App() {
         obraAEditar={obraAEditar}
         clientes={clientes}
         obras={obras}
+        tabletPos={tabletPos}
+        onAbrirMapaPicker={(config) => setMapaPickerConfig(config)}
+        usuarioActivo={usuarioActivo}
+      />
+
+      {/* ALTA / EDICIÓN DE CLIENTE (HOMOLOGADO A OBRA) */}
+      <ModalCliente
+        isOpen={modalCliente}
+        onClose={() => { setModalCliente(false); setClienteAEditar(null); }}
+        onSave={handleGuardarCliente}
+        clientes={clientes}
+        clienteAEditar={clienteAEditar}
         tabletPos={tabletPos}
         onAbrirMapaPicker={(config) => setMapaPickerConfig(config)}
         usuarioActivo={usuarioActivo}
@@ -532,30 +527,6 @@ export default function App() {
         obra={configComercial?.obra}
         tipoDefault={configComercial?.tipo || 'COTIZACION'}
         onSave={handleGuardarMovimiento}
-      />
-
-      {/* CLIENTE */}
-      <ModalCliente
-        isOpen={modalCliente}
-        onClose={() => { setModalCliente(false); setClienteAEditar(null); }}
-        onSave={async (c) => {
-          try { await guardarClienteDB(c); } catch {}
-          if (clienteAEditar) setClientes(prev => prev.map(item => item.id === c.id ? c : item));
-          else setClientes(prev => [c, ...prev]);
-        }}
-        clientes={clientes}
-        formCliente={formCliente}
-        setFormCliente={setFormCliente}
-        clienteAEditar={clienteAEditar}
-        onAbrirMapaPicker={() => {
-          setMapaPickerConfig({
-            initialPos: formCliente.lat && formCliente.lng ? { lat: formCliente.lat, lng: formCliente.lng } : tabletPos,
-            onConfirm: ({ lat, lng, direccion }) => {
-              setFormCliente(prev => ({ ...prev, lat, lng, direccion: direccion || prev.direccion }));
-            }
-          });
-        }}
-        usuarioActivo={usuarioActivo}
       />
 
       {/* SELECTOR GPS */}
