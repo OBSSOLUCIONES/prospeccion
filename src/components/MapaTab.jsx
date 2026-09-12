@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Navigation, Radio, Layers, Crosshair, Route, Download, Calendar, UserCheck } from 'lucide-react';
+import { Navigation, Radio, Layers, Crosshair, Route, Download, Calendar, UserCheck, Building } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
+// COORDENADAS PRECISAS (VILLADIEGO CORREGIDO EN MORELIA: COL. NUEVA VALLADOLID)
 const SUCURSAL_COORDS = {
   'ALTOZANO': [19.6642, -101.1718],
   'LA MIRA': [18.0333, -102.3167],
@@ -13,7 +14,7 @@ const SUCURSAL_COORDS = {
   'PERIFERICO': [19.7000, -101.1900],
   'SAN MIGUEL': [20.9144, -100.7452],
   'URIANGATO': [20.1417, -101.1764],
-  'VILLADIEGO': [20.4000, -101.5000],
+  'VILLADIEGO': [19.6918, -101.2090], // C. Gaspar de Villadiego 179, Nueva Valladolid, Morelia
   'ZAMORA': [19.9833, -102.2833],
   'ZIHUATANEJO': [17.6410, -101.5510]
 };
@@ -56,7 +57,6 @@ const tuDispositivoIcon = L.divIcon({
   iconAnchor: [12, 12]
 });
 
-// Icono con número de parada para la ruta de auditoría
 const crearIconoParada = (numero) => L.divIcon({
   className: 'bg-transparent border-none',
   html: `
@@ -94,10 +94,11 @@ export default function MapaTab({
   const [verClientes, setVerClientes] = useState(true);
   const [ordenVuelo, setOrdenVuelo] = useState(null);
 
-  // MODO FLOTILLA / AUDITORÍA DE RUTAS (PIN 9999)
+  // MODO FLOTILLA / AUDITORÍA DE RUTAS
   const [modoRutaFlotilla, setModoRutaFlotilla] = useState(false);
   const hoyStr = new Date().toISOString().slice(0, 10);
   const [fechaRuta, setFechaRuta] = useState(hoyStr);
+  const [sucursalRuta, setSucursalRuta] = useState('TODAS');
   const [asesorSeleccionado, setAsesorSeleccionado] = useState('TODOS');
 
   const centroInicial = [tabletPos?.lat || 19.6642, tabletPos?.lng || -101.1718];
@@ -113,136 +114,50 @@ export default function MapaTab({
       lngFinal: parseFloat(o.lng)
     }));
 
-  // Lista única de asesores que han hecho visitas
+  // Lista dinámica de asesores filtrada según la sucursal de ruta
   const listaAsesores = useMemo(() => {
-    const nombres = visitas.map(v => v.asesorNombre).filter(Boolean);
+    const visitasFiltradas = sucursalRuta === 'TODAS'
+      ? visitas
+      : visitas.filter(v => v.sucursal === sucursalRuta);
+    const nombres = visitasFiltradas.map(v => v.asesorNombre).filter(Boolean);
     return Array.from(new Set(nombres));
-  }, [visitas]);
+  }, [visitas, sucursalRuta]);
 
-  // Visitas ordenadas para trazar la ruta de flotilla
+  // Visitas para trazar la ruta filtradas por Sucursal + Asesor + Fecha
   const visitasDeRuta = useMemo(() => {
     if (!modoRutaFlotilla) return [];
     return visitas
       .filter(v => {
+        const coincideSucursal = sucursalRuta === 'TODAS' || v.sucursal === sucursalRuta;
         const coincideFecha = v.fecha && v.fecha.startsWith(fechaRuta);
         const coincideAsesor = asesorSeleccionado === 'TODOS' || v.asesorNombre === asesorSeleccionado;
         const tieneGps = Boolean(v.latGpsReal && v.lngGpsReal);
-        return coincideFecha && coincideAsesor && tieneGps;
+        return coincideSucursal && coincideFecha && coincideAsesor && tieneGps;
       })
       .sort((a, b) => new Date(a.fecha.replace(' ', 'T')) - new Date(b.fecha.replace(' ', 'T')));
-  }, [visitas, modoRutaFlotilla, fechaRuta, asesorSeleccionado]);
+  }, [visitas, modoRutaFlotilla, sucursalRuta, fechaRuta, asesorSeleccionado]);
 
   const puntosPolilinea = visitasDeRuta.map(v => [parseFloat(v.latGpsReal), parseFloat(v.lngGpsReal)]);
 
-  // GENERAR Y DESCARGAR IMAGEN DE LA RUTA EN PNG (ESTILO REPORTE LOGÍSTICO)
-  const descargarImagenRuta = () => {
-    if (!visitasDeRuta.length) {
-      alert('No hay visitas registradas para este asesor en la fecha seleccionada.');
-      return;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 900;
-    canvas.height = 1150;
-    const ctx = canvas.getContext('2d');
-
-    // Fondo
-    ctx.fillStyle = '#0B1120';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Cabecera Corporativa
-    ctx.fillStyle = '#001757';
-    ctx.fillRect(0, 0, canvas.width, 130);
-
-    ctx.fillStyle = '#0091FB';
-    ctx.font = 'bold 22px Montserrat, sans-serif';
-    ctx.fillText('AUDITORÍA DE RUTAS Y RECORRIDOS EN CAMPO', 40, 50);
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 15px Montserrat, sans-serif';
-    ctx.fillText(`Asesor: ${asesorSeleccionado}  |  Fecha: ${fechaRuta}`, 40, 85);
-
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '13px Montserrat, sans-serif';
-    ctx.fillText(`Total de Paradas Registradas: ${visitasDeRuta.length} puntos de supervisión`, 40, 110);
-
-    // Tarjeta Resumen
-    ctx.fillStyle = '#1E293B';
-    ctx.roundRect(40, 150, 820, 90, 16);
-    ctx.fill();
-
-    ctx.fillStyle = '#38BDF8';
-    ctx.font = 'bold 14px Montserrat, sans-serif';
-    ctx.fillText('ESTADÍSTICAS DEL RECORRIDO', 60, 180);
-
-    ctx.fillStyle = '#F8FAFC';
-    ctx.font = '13px Montserrat, sans-serif';
-    const primerPunto = visitasDeRuta[0]?.fecha.split(' ')[1] || '--';
-    const ultimoPunto = visitasDeRuta[visitasDeRuta.length - 1]?.fecha.split(' ')[1] || '--';
-    ctx.fillText(`Inicio de Ruta: ${primerPunto} hrs    |    Fin de Ruta: ${ultimoPunto} hrs`, 60, 210);
-
-    // Timeline de Paradas
-    ctx.fillStyle = '#38BDF8';
-    ctx.font = 'bold 16px Montserrat, sans-serif';
-    ctx.fillText('SECUENCIA CRONOLÓGICA DE PARADAS (GPS AUDITADO)', 40, 280);
-
-    let y = 320;
-    visitasDeRuta.forEach((v, index) => {
-      if (y > 1050) return;
-      const obra = obras.find(o => o.id === v.obraId);
-      const nombreObra = obra ? obra.nombre : `Obra ${v.obraId}`;
-
-      // Caja de parada
-      ctx.fillStyle = '#1E293B';
-      ctx.roundRect(40, y, 820, 70, 12);
-      ctx.fill();
-
-      // Círculo con número
-      ctx.fillStyle = '#0091FB';
-      ctx.beginPath();
-      ctx.arc(75, y + 35, 18, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 14px Montserrat, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(String(index + 1), 75, y + 40);
-      ctx.textAlign = 'left';
-
-      // Detalles de la parada
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 14px Montserrat, sans-serif';
-      ctx.fillText(nombreObra, 110, y + 30);
-
-      ctx.fillStyle = '#94A3B8';
-      ctx.font = '12px Montserrat, sans-serif';
-      ctx.fillText(
-        `Hora: ${v.fecha.split(' ')[1] || v.fecha}  •  Fase: ${v.estatus}  •  Auditoría: ${v.auditoriaEstado === 'en_sitio' ? 'En Sitio (Válido)' : 'Remoto'} (${v.distanciaAuditoriaMetros}m)`,
-        110,
-        y + 52
-      );
-
-      y += 82;
-    });
-
-    // Pie de página
-    ctx.fillStyle = '#64748B';
-    ctx.font = '11px Montserrat, sans-serif';
-    ctx.fillText('Generado automáticamente por Control de Obras - Red Azul • Certificado de Auditoría GPS', 40, 1120);
-
-    // Descarga automática en PNG
-    const link = document.createElement('a');
-    link.download = `Reporte_Ruta_${asesorSeleccionado}_${fechaRuta}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  };
-
+  // Manejar cambio de sucursal en el mapa general
   const handleCambiarSucursal = (sucursalSeleccionada) => {
     setFiltroSucursal(sucursalSeleccionada);
     if (sucursalSeleccionada !== 'TODAS' && SUCURSAL_COORDS[sucursalSeleccionada]) {
       setOrdenVuelo({
         coords: SUCURSAL_COORDS[sucursalSeleccionada],
-        zoom: 13
+        zoom: 14
+      });
+    }
+  };
+
+  // Manejar cambio de sucursal dentro del modo flotilla
+  const handleCambiarSucursalRuta = (suc) => {
+    setSucursalRuta(suc);
+    setAsesorSeleccionado('TODOS');
+    if (suc !== 'TODAS' && SUCURSAL_COORDS[suc]) {
+      setOrdenVuelo({
+        coords: SUCURSAL_COORDS[suc],
+        zoom: 14
       });
     }
   };
@@ -259,6 +174,107 @@ export default function MapaTab({
   const resetVuelo = useCallback(() => {
     setOrdenVuelo(null);
   }, []);
+
+  // GENERAR IMAGEN PNG DE AUDITORÍA LOGÍSTICA
+  const descargarImagenRuta = () => {
+    if (!visitasDeRuta.length) {
+      alert(`No hay visitas registradas para la sucursal ${sucursalRuta} en la fecha ${fechaRuta}.`);
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 1180;
+    const ctx = canvas.getContext('2d');
+
+    // Fondo
+    ctx.fillStyle = '#0B1120';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Cabecera Corporativa
+    ctx.fillStyle = '#001757';
+    ctx.fillRect(0, 0, canvas.width, 140);
+
+    ctx.fillStyle = '#0091FB';
+    ctx.font = 'bold 22px Montserrat, sans-serif';
+    ctx.fillText('AUDITORÍA DE RUTAS Y FLOTILLA EN CAMPO', 40, 45);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 15px Montserrat, sans-serif';
+    ctx.fillText(`Sucursal: ${sucursalRuta}  |  Asesor: ${asesorSeleccionado}  |  Fecha: ${fechaRuta}`, 40, 80);
+
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '13px Montserrat, sans-serif';
+    ctx.fillText(`Total de Paradas Registradas: ${visitasDeRuta.length} puntos de supervisión`, 40, 110);
+
+    // Tarjeta Resumen
+    ctx.fillStyle = '#1E293B';
+    ctx.roundRect(40, 160, 820, 90, 16);
+    ctx.fill();
+
+    ctx.fillStyle = '#38BDF8';
+    ctx.font = 'bold 14px Montserrat, sans-serif';
+    ctx.fillText('ESTADÍSTICAS DEL RECORRIDO', 60, 190);
+
+    ctx.fillStyle = '#F8FAFC';
+    ctx.font = '13px Montserrat, sans-serif';
+    const primerPunto = visitasDeRuta[0]?.fecha.split(' ')[1] || '--';
+    const ultimoPunto = visitasDeRuta[visitasDeRuta.length - 1]?.fecha.split(' ')[1] || '--';
+    ctx.fillText(`Primer Check-in: ${primerPunto} hrs    |    Último Check-in: ${ultimoPunto} hrs`, 60, 220);
+
+    // Timeline de Paradas
+    ctx.fillStyle = '#38BDF8';
+    ctx.font = 'bold 16px Montserrat, sans-serif';
+    ctx.fillText('SECUENCIA CRONOLÓGICA DE PARADAS (GPS AUDITADO)', 40, 290);
+
+    let y = 330;
+    visitasDeRuta.forEach((v, index) => {
+      if (y > 1070) return;
+      const obra = obras.find(o => o.id === v.obraId);
+      const nombreObra = obra ? obra.nombre : `Obra ${v.obraId}`;
+
+      ctx.fillStyle = '#1E293B';
+      ctx.roundRect(40, y, 820, 70, 12);
+      ctx.fill();
+
+      // Círculo con número
+      ctx.fillStyle = '#0091FB';
+      ctx.beginPath();
+      ctx.arc(75, y + 35, 18, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px Montserrat, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(index + 1), 75, y + 40);
+      ctx.textAlign = 'left';
+
+      // Detalles
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px Montserrat, sans-serif';
+      ctx.fillText(nombreObra, 110, y + 30);
+
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '12px Montserrat, sans-serif';
+      ctx.fillText(
+        `Hora: ${v.fecha.split(' ')[1] || v.fecha}  •  Fase: ${v.estatus}  •  Auditoría: ${v.auditoriaEstado === 'en_sitio' ? 'En Sitio' : 'Remoto'} (${v.distanciaAuditoriaMetros}m)  •  Asesor: ${v.asesorNombre}`,
+        110,
+        y + 52
+      );
+
+      y += 82;
+    });
+
+    // Pie de página
+    ctx.fillStyle = '#64748B';
+    ctx.font = '11px Montserrat, sans-serif';
+    ctx.fillText('Generado por Control de Obras - Red Azul • Certificado de Auditoría Territorial', 40, 1150);
+
+    const link = document.createElement('a');
+    link.download = `Ruta_${sucursalRuta}_${asesorSeleccionado}_${fechaRuta}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
 
   return (
     <div className="space-y-2.5 pb-24">
@@ -279,7 +295,7 @@ export default function MapaTab({
           </div>
 
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
-            {/* Botón Modo Flotilla */}
+            {/* Alternador de Modo Flotilla */}
             <button
               type="button"
               onClick={() => setModoRutaFlotilla(!modoRutaFlotilla)}
@@ -292,6 +308,7 @@ export default function MapaTab({
               <span>{modoRutaFlotilla ? 'Ver Mapa Normal' : '🚗 Rutas de Flotilla'}</span>
             </button>
 
+            {/* Selector de Sucursal del Mapa */}
             <select
               value={filtroSucursal}
               onChange={(e) => handleCambiarSucursal(e.target.value)}
@@ -304,10 +321,24 @@ export default function MapaTab({
           </div>
         </div>
 
-        {/* PANEL DE CONTROL DE RUTA CUANDO EL MODO FLOTILLA ESTÁ ACTIVO */}
+        {/* PANEL DE RUTAS DE FLOTILLA CON FILTRO DE SUCURSAL + ASESOR + FECHA */}
         {modoRutaFlotilla ? (
           <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
             <div className="flex items-center gap-2 flex-wrap text-xs">
+              
+              {/* FILTRO 1: SUCURSAL DE LA RUTA */}
+              <div className="flex items-center gap-1">
+                <Building className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={sucursalRuta}
+                  onChange={(e) => handleCambiarSucursalRuta(e.target.value)}
+                  className="bg-white border border-slate-200 text-[#001757] text-xs font-black rounded-lg px-2 py-1 outline-none">
+                  <option value="TODAS">Todas las Sucursales</option>
+                  {SUCURSALES.map(s => <option key={s.codigo} value={s.nombre}>{s.nombre}</option>)}
+                </select>
+              </div>
+
+              {/* FILTRO 2: FECHA */}
               <div className="flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
                 <input
@@ -318,6 +349,7 @@ export default function MapaTab({
                 />
               </div>
 
+              {/* FILTRO 3: ASESOR DE ESA SUCURSAL */}
               <div className="flex items-center gap-1">
                 <UserCheck className="w-3.5 h-3.5 text-slate-400" />
                 <select
@@ -334,7 +366,7 @@ export default function MapaTab({
               </span>
             </div>
 
-            {/* BOTÓN DESCARGA DE REPORTE EN IMAGEN */}
+            {/* BOTÓN DESCARGAR REPORTE PNG */}
             <button
               type="button"
               onClick={descargarImagenRuta}
@@ -390,7 +422,7 @@ export default function MapaTab({
             onVueloCompletado={resetVuelo} 
           />
 
-          {/* Círculo de precisión GPS */}
+          {/* Círculo GPS */}
           {tabletPos?.lat && tabletPos?.lng && (
             <Circle
               center={[tabletPos.lat, tabletPos.lng]}
@@ -417,7 +449,7 @@ export default function MapaTab({
             </Marker>
           )}
 
-          {/* LÍNEA DE RUTA Y PARADAS NUMERADAS (MODO FLOTILLA) */}
+          {/* TRAZO DE LÍNEA DE RUTA Y PARADAS NUMERADAS */}
           {modoRutaFlotilla && puntosPolilinea.length > 1 && (
             <Polyline
               positions={puntosPolilinea}
@@ -434,6 +466,7 @@ export default function MapaTab({
                 <div className="text-xs space-y-1">
                   <span className="font-bold text-[#001757]">Parada #{idx + 1}</span>
                   <p className="font-bold text-slate-800">Hora: {v.fecha.split(' ')[1] || v.fecha}</p>
+                  <p className="text-[10px] text-slate-500">Sucursal: {v.sucursal}</p>
                   <p className="text-[10px] text-slate-500">Asesor: {v.asesorNombre}</p>
                   <p className="text-[10px] font-bold text-emerald-700">Auditoría: {v.distanciaAuditoriaMetros}m</p>
                 </div>
@@ -441,7 +474,7 @@ export default function MapaTab({
             </Marker>
           ))}
 
-          {/* PINES DE OBRAS (MODO NORMAL) */}
+          {/* PINES DE OBRAS */}
           {!modoRutaFlotilla && verObras && obrasConCoordenadas.map(obra => (
             <Marker key={`obra-${obra.id}`} position={[obra.latFinal, obra.lngFinal]} icon={obraIcon}>
               <Popup>
@@ -472,7 +505,7 @@ export default function MapaTab({
             </Marker>
           ))}
 
-          {/* PINES DE CLIENTES (MODO NORMAL) */}
+          {/* PINES DE CLIENTES */}
           {!modoRutaFlotilla && verClientes && clientesPorSucursal.filter(c => c.lat && c.lng).map(c => (
             <Marker key={`cliente-${c.id}`} position={[parseFloat(c.lat), parseFloat(c.lng)]} icon={clienteIcon}>
               <Popup>

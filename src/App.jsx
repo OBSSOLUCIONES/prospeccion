@@ -330,7 +330,7 @@ export default function App() {
     }
   };
 
-  // EXPORTADOR POWER BI SEGÚN SUCURSAL SELECCIONADA POR EL DIRECTOR
+  // EXPORTADOR POWER BI
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -589,7 +589,7 @@ export default function App() {
 
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* PANEL DE METAS Y KPIS */}
+      {/* PANEL DE METAS Y KPIS (CON VISTA MULTI-SUCURSAL PARA DIRECTOR) */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
@@ -601,6 +601,10 @@ export default function App() {
         totalObras={obras.length}
         ventasCerradas={ventasCerradasTotal}
         totalObrasFrias={totalObrasFrias}
+        esDirector={esDirector}
+        visitas={visitas}
+        obras={obras}
+        movimientos={movimientos}
       />
 
       {/* EXPEDIENTE 360° */}
