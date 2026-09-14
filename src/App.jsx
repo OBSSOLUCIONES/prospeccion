@@ -104,7 +104,6 @@ export default function App() {
   const [estaOnline, setEstaOnline] = useState(navigator.onLine);
   const [pendientesOffline, setPendientesOffline] = useState(0);
 
-  // Huella digital única del dispositivo físico (evita duplicar la tablet)
   const deviceIdRef = useRef((() => {
     let id = localStorage.getItem('obs_dispositivo_id');
     if (!id) {
@@ -296,7 +295,6 @@ export default function App() {
     }
   }, [usuarioActivo]);
 
-  // Transmisión GPS con DeviceId único
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGpsEstado('bloqueado');
@@ -461,6 +459,9 @@ export default function App() {
     }
   };
 
+  // =========================================================================
+  // EXPORTADOR POWER BI Y EXCEL 1000% FUNCIONAL (CON LINKS CLICKEABLES)
+  // =========================================================================
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -472,6 +473,7 @@ export default function App() {
       ? clientes
       : clientes.filter(c => c.sucursal === filtroSucursal);
 
+    // 1. Dim_Clientes: Con link directo a Maps e ID Red Azul
     const hojaClientes = clientesAExportar.map(c => {
       const obrasCliente = obras.filter(o => o.clienteId === c.id);
       const obrasIds = obrasCliente.map(o => o.id);
@@ -485,9 +487,13 @@ export default function App() {
         .filter(m => m.tipo === 'VENTA')
         .reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
 
+      const linkGoogleMaps = (c.lat && c.lng) 
+        ? `https://www.google.com/maps?q=${c.lat},${c.lng}` 
+        : (c.ubicacion || 'SIN UBICACIÓN');
+
       return {
         cliente_id: c.id,
-        id_obs: c.idRedAzul || 'SIN_ID',
+        id_red_azul: c.idRedAzul || 'SIN_ID',
         nombre_cliente: c.nombreCliente,
         sucursal: c.sucursal,
         clasificacion_cliente: c.tipoCliente || 'PROSPECTO',
@@ -498,12 +504,12 @@ export default function App() {
         total_obras_asociadas: obrasCliente.length,
         total_cotizado_mxn: totalCotizado,
         total_vendido_mxn: totalVendido,
-        latitud: c.lat ? Number(parseFloat(c.lat).toFixed(6)) : null,
-        longitud: c.lng ? Number(parseFloat(c.lng).toFixed(6)) : null,
+        link_ubicacion_maps: linkGoogleMaps, // Enlace clickeable directo
         direccion_fiscal: c.direccion || ''
       };
     });
 
+    // 2. Dim_Obras: Con link directo a Maps
     const hojaObras = obrasAExportar.map(o => {
       const cli = clientes.find(c => c.id === o.clienteId);
       const visObra = visitas.filter(v => v.obraId === o.id);
@@ -518,6 +524,9 @@ export default function App() {
       const totalVendido = movsObra.filter(m => m.tipo === 'VENTA').reduce((s, v) => s + (Number(v.monto) || 0), 0);
 
       const fInfo = formatearFechaParaPowerBI(ultima ? ultima.fecha : null);
+      const linkGoogleMapsObra = (o.lat && o.lng) 
+        ? `https://www.google.com/maps?q=${o.lat},${o.lng}` 
+        : 'SIN UBICACIÓN';
 
       return {
         obra_id: o.id,
@@ -538,16 +547,22 @@ export default function App() {
         id_fecha_ultima_visita: fInfo.id_fecha,
         total_cotizado_mxn: totalCotizado,
         total_vendido_mxn: totalVendido,
-        latitud: o.lat ? Number(parseFloat(o.lat).toFixed(6)) : null,
-        longitud: o.lng ? Number(parseFloat(o.lng).toFixed(6)) : null,
+        link_ubicacion_maps: linkGoogleMapsObra, // Enlace clickeable directo
         direccion: o.direccion || ''
       };
     });
 
+    // 3. Fact_Visitas: Con links directos a las fotos en lugar de solo el conteo
     const hojaVisitas = visitas
       .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
       .map(v => {
         const fInfo = formatearFechaParaPowerBI(v.fecha);
+        const linkGpsVisita = (v.latGpsReal && v.lngGpsReal)
+          ? `https://www.google.com/maps?q=${v.latGpsReal},${v.lngGpsReal}`
+          : 'SIN COORDENADAS';
+
+        const fotosLista = Array.isArray(v.fotos) ? v.fotos : [];
+
         return {
           visita_id: v.id,
           obra_id: v.obraId,
@@ -561,18 +576,23 @@ export default function App() {
           actividad: v.actividad,
           distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
           estado_auditoria_gps: v.auditoriaEstado || 'remoto',
-          latitud_real_gps: v.latGpsReal ? Number(parseFloat(v.latGpsReal).toFixed(6)) : null,
-          longitud_real_gps: v.lngGpsReal ? Number(parseFloat(v.lngGpsReal).toFixed(6)) : null,
-          cantidad_fotos: (v.fotos || []).length,
+          link_gps_auditoria: linkGpsVisita, // Enlace clickeable a Maps
+          link_foto_1: fotosLista[0] || 'SIN FOTO', // Abre la foto con 1 clic
+          link_foto_2: fotosLista[1] || '',
+          link_foto_3: fotosLista[2] || '',
+          todos_los_links_fotos: fotosLista.join(' | '), // Todos los links juntos
           observaciones: v.observaciones || ''
         };
       });
 
+    // 4. Fact_Movimientos: Con link al documento o remisión adjunta
     const obrasIdsValidas = obrasAExportar.map(o => o.id);
     const hojaMovimientos = movimientos
       .filter(m => obrasIdsValidas.includes(m.obraId))
       .map(m => {
         const fInfo = formatearFechaParaPowerBI(m.fecha);
+        const linkDoc = m.documentoAdjunto?.url || m.documento_adjunto?.url || 'SIN DOCUMENTO';
+
         return {
           movimiento_id: m.id,
           obra_id: m.obraId,
@@ -588,7 +608,7 @@ export default function App() {
           id_fecha: fInfo.id_fecha,
           hora_registro: fInfo.hora,
           cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
-          tiene_adjunto: m.documentoAdjunto?.url ? 'SI' : 'NO'
+          link_documento_adjunto: linkDoc // Abre el PDF o remisión con 1 clic
         };
       });
 
@@ -728,7 +748,6 @@ export default function App() {
           />
         )}
 
-        {/* PESTAÑA MAPA CONECTADA AL DISPOSITIVO */}
         {tab === 'mapa' && esDirector && (
           <MapaTab 
             tabletPos={tabletPos}

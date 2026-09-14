@@ -18,7 +18,7 @@ export default function ModalCliente({
     nombreCliente: '',
     tipoCliente: 'PROSPECTO',
     tipoMercado: '',
-    responsable: '',
+    responsable: '', // SIEMPRE EN BLANCO
     contacto: '',
     correo: '',
     idRedAzul: '',
@@ -27,7 +27,7 @@ export default function ModalCliente({
     lng: null
   });
 
-  // Inicialización limpia e independiente
+  // Inicialización limpia: Responsable SIEMPRE en blanco para nuevo cliente
   useEffect(() => {
     if (!isOpen) return;
 
@@ -36,6 +36,7 @@ export default function ModalCliente({
         ...clienteAEditar,
         tipoCliente: clienteAEditar.tipoCliente || 'PROSPECTO',
         tipoMercado: clienteAEditar.tipoMercado || '',
+        responsable: clienteAEditar.responsable || '',
         contacto: clienteAEditar.contacto || '',
         correo: clienteAEditar.correo || '',
         idRedAzul: clienteAEditar.idRedAzul || ''
@@ -50,7 +51,7 @@ export default function ModalCliente({
         nombreCliente: '',
         tipoCliente: 'PROSPECTO',
         tipoMercado: '',
-        responsable: usuarioActivo?.nombre || '',
+        responsable: '', // CAMPO EN BLANCO PARA NUEVO CLIENTE
         contacto: '',
         correo: '',
         idRedAzul: '',
@@ -72,7 +73,7 @@ export default function ModalCliente({
     onSave({
       id: idMostrado,
       ...form,
-      ubicacion: form.lat && form.lng ? `https://maps.google.com/?q=${form.lat},${form.lng}` : ''
+      ubicacion: form.lat && form.lng ? `https://www.google.com/maps?q=${form.lat},${form.lng}` : ''
     });
     onClose();
   };
@@ -81,7 +82,7 @@ export default function ModalCliente({
     <div className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
       <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
         
-        {/* CABECERA HOMOLOGADA */}
+        {/* Cabecera */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="min-w-0 pr-2">
             <div className="flex items-center gap-2">
@@ -107,7 +108,7 @@ export default function ModalCliente({
 
         <form id="form-cliente" onSubmit={handleSubmit} className="overflow-y-auto p-4 space-y-3.5 text-xs">
           
-          {/* BLOQUE 1: SUCURSAL E ID RED AZUL */}
+          {/* Sucursal e ID Red Azul */}
           <div className="grid grid-cols-2 gap-2 bg-blue-50/60 p-3 rounded-2xl border border-blue-100">
             <div>
               <label className="block font-black text-[#001757] mb-1">Sucursal *</label>
@@ -132,7 +133,7 @@ export default function ModalCliente({
             </div>
           </div>
 
-          {/* BLOQUE 2: NOMBRE DEL CLIENTE / EMPRESA */}
+          {/* Nombre Cliente */}
           <div>
             <label className="block font-bold text-slate-800 mb-1">Nombre del Cliente / Razón Social *</label>
             <input 
@@ -144,7 +145,7 @@ export default function ModalCliente({
             />
           </div>
 
-          {/* BLOQUE 3: TIPO DE CLIENTE (PÍLDORAS TÁCTILES) */}
+          {/* Tipo de Cliente */}
           <div className="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-1.5">
             <label className="block font-black text-slate-700 text-[11px] uppercase tracking-wider">
               Clasificación de Cliente *
@@ -166,7 +167,7 @@ export default function ModalCliente({
             </div>
           </div>
 
-          {/* BLOQUE 4: CONTACTO, RESPONSABLE Y MERCADO */}
+          {/* Encargado / Responsable (EN BLANCO) y Teléfono */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block font-bold text-slate-800 mb-1">Encargado / Contacto *</label>
@@ -191,6 +192,7 @@ export default function ModalCliente({
             </div>
           </div>
 
+          {/* Correo y Mercado */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block font-bold text-slate-800 mb-1">Correo Electrónico</label>
@@ -215,7 +217,7 @@ export default function ModalCliente({
             </div>
           </div>
 
-          {/* BLOQUE 5: GEOLOCALIZACIÓN Y DIRECCIÓN (EXACTAMENTE IGUAL A OBRA) */}
+          {/* Geolocalización y Dirección */}
           <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <label className="font-bold text-slate-900 text-xs">Ubicación y Dirección Fiscal/Oficina *</label>
@@ -248,7 +250,6 @@ export default function ModalCliente({
 
         </form>
 
-        {/* BOTÓN INFERIOR HOMOLOGADO */}
         <div className="p-3.5 bg-white border-t border-slate-100 shrink-0">
           <button
             type="submit"
