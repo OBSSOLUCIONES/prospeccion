@@ -156,7 +156,7 @@ export default function PipelineTab({
   return (
     <div className="space-y-3.5 pb-28">
       
-      {/* 1. BARRA DE ACCIONES RÁPIDAS (SUPER INTUITIVA) */}
+      {/* 1. BARRA DE ACCIONES RÁPIDAS */}
       {!esAdmin && (
         <div className="grid grid-cols-2 gap-2.5">
           <button
@@ -187,16 +187,19 @@ export default function PipelineTab({
         </div>
       )}
 
-      {/* 2. Buscador y Filtros */}
+      {/* 2. Buscador con Lupa Centrada Matemáticamente */}
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="relative flex-1">
-          <Search className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Search className="w-4 h-4 text-slate-400" />
+          </div>
+
           <input 
             type="text"
             placeholder="Buscar por obra, folio o cliente..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-11 pl-11 pr-4 rounded-2xl border border-slate-300/80 bg-white text-xs sm:text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0091FB] focus:ring-2 focus:ring-[#0091FB]/15 shadow-sm transition-all"
+            className="w-full h-11 pl-10 pr-4 rounded-2xl border border-slate-300/80 bg-white text-xs sm:text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0091FB] focus:ring-2 focus:ring-[#0091FB]/15 shadow-sm transition-all"
           />
         </div>
 
@@ -218,7 +221,7 @@ export default function PipelineTab({
         </button>
       </div>
 
-      {/* 3. Ordenamiento Táctil Rápido */}
+      {/* 3. Ordenamiento Táctil */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         <button
           type="button"
@@ -267,7 +270,7 @@ export default function PipelineTab({
         )}
       </div>
 
-      {/* 4. LISTADO DE OBRAS CON ACCIONES DE 1 SOLO TOQUE (ERGONOMÍA NATIVA) */}
+      {/* 4. Cuadrícula de Obras */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         {obrasFiltradas.length === 0 ? (
           <div className="col-span-full p-10 text-center bg-white rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
@@ -376,10 +379,8 @@ export default function PipelineTab({
                   </div>
                 </div>
 
-                {/* BOTONES DIRECTOS DE 1 TOQUE: CERO CONFUSIÓN */}
+                {/* BOTONES DIRECTOS */}
                 <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-1.5">
-                  
-                  {/* Botón 1: Check-in Visita */}
                   <button
                     type="button"
                     onClick={() => onNuevaVisita && onNuevaVisita(obra)}
@@ -388,7 +389,6 @@ export default function PipelineTab({
                     <span>+ Visita</span>
                   </button>
 
-                  {/* Botón 2: Cotización / Venta */}
                   <button
                     type="button"
                     onClick={() => onNuevoMovimiento && onNuevoMovimiento({ obra, tipo: 'VENTA' })}
@@ -397,7 +397,6 @@ export default function PipelineTab({
                     <span>+ Venta</span>
                   </button>
 
-                  {/* Botón 3: Expediente Completo */}
                   <button
                     type="button"
                     onClick={() => onSeleccionarObra(obra)}
@@ -405,7 +404,6 @@ export default function PipelineTab({
                     <span>Expediente</span>
                     <ChevronRight className="w-3.5 h-3.5 text-slate-500 stroke-[2.5]" />
                   </button>
-
                 </div>
 
               </div>
@@ -418,7 +416,6 @@ export default function PipelineTab({
       {modalFiltrosAbierto && (
         <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
           <div className="w-full sm:max-w-md bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85dvh] overflow-y-auto border border-slate-200">
-            
             <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden" />
 
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
