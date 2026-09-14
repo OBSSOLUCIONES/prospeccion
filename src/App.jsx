@@ -1,7 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { AlertTriangle, MapPin, Zap } from 'lucide-react';
+import { AlertTriangle, MapPin, Zap, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 import { 
   CLIENTES_INICIALES, 
@@ -47,7 +47,8 @@ import {
   suscribirPosicionesEnVivo,
   suscribirCambiosGlobales,
   sincronizarColaOffline,
-  contarItemsColaOffline
+  contarItemsColaOffline,
+  notificarToast
 } from './lib/supabase';
 
 function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
@@ -101,6 +102,27 @@ export default function App() {
   const [tab, setTab] = useState('pipeline');
   const [mostrarSplash, setMostrarSplash] = useState(true);
   
+  // SISTEMA DE TOASTS NATIVOS
+  const [toasts, setToasts] = useState([]);
+
+  const agregarToast = useCallback((mensaje, tipo = 'info') => {
+    const id = Date.now() + Math.random().toString(36).substring(2, 5);
+    setToasts(prev => [...prev.slice(-2), { id, mensaje, tipo }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3500);
+  }, []);
+
+  useEffect(() => {
+    const escucharToast = (e) => {
+      if (e.detail && e.detail.mensaje) {
+        agregarToast(e.detail.mensaje, e.detail.tipo || 'info');
+      }
+    };
+    window.addEventListener('obs_toast', escucharToast);
+    return () => window.removeEventListener('obs_toast', escucharToast);
+  }, [agregarToast]);
+
   const [estaOnline, setEstaOnline] = useState(navigator.onLine);
   const [pendientesOffline, setPendientesOffline] = useState(0);
 
@@ -186,6 +208,37 @@ export default function App() {
     itemAEliminar
   );
 
+  // SCREEN WAKELOCK NATIVO: Evita que la pantalla se apague sola en campo o vehículo [1]
+  useEffect(() => {
+    let wakeLockInstance = null;
+    const solicitarWakeLock = async () => {
+      if ('wakeLock' in navigator && usuarioActivo) {
+        try {
+          wakeLockInstance = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.warn('WakeLock denegado o no soportado:', err);
+        }
+      }
+    };
+
+    solicitarWakeLock();
+
+    const manejarVisibilidad = () => {
+      if (document.visibilityState === 'visible') {
+        solicitarWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', manejarVisibilidad);
+
+    return () => {
+      document.removeEventListener('visibilitychange', manejarVisibilidad);
+      if (wakeLockInstance) {
+        wakeLockInstance.release().catch(() => {});
+      }
+    };
+  }, [usuarioActivo]);
+
   const obraProxima = useMemo(() => {
     if (esDirector || !tabletPos?.lat || !tabletPos?.lng) return null;
     for (const o of obras) {
@@ -219,9 +272,13 @@ export default function App() {
   useEffect(() => {
     const manejarOnline = () => {
       setEstaOnline(true);
+      notificarToast('🟢 Conexión a internet restablecida', 'exito');
       ejecutarSincronizacionOffline();
     };
-    const manejarOffline = () => setEstaOnline(false);
+    const manejarOffline = () => {
+      setEstaOnline(false);
+      notificarToast('🟡 Sin conexión: operando en modo local seguro', 'advertencia');
+    };
     const manejarColaActualizada = () => refrescarConteoOffline();
 
     window.addEventListener('online', manejarOnline);
@@ -452,16 +509,13 @@ export default function App() {
         setObraSeleccionada(obraActualizada);
         await guardarObraDB(obraActualizada);
         refrescarConteoOffline();
-        alert(`¡Obra vinculada con éxito a ${existe.nombreCliente}!`);
+        notificarToast(`✅ Obra vinculada con éxito a ${existe.nombreCliente}`, 'exito');
       } else {
-        alert('No encontramos ningún cliente con ese ID en el catálogo.');
+        notificarToast('⚠️ No encontramos ningún cliente con ese ID', 'advertencia');
       }
     }
   };
 
-  // =========================================================================
-  // EXPORTADOR POWER BI Y EXCEL 1000% FUNCIONAL (CON LINKS CLICKEABLES)
-  // =========================================================================
   const exportarAExcel = () => {
     if (!esDirector) return;
 
@@ -473,7 +527,6 @@ export default function App() {
       ? clientes
       : clientes.filter(c => c.sucursal === filtroSucursal);
 
-    // 1. Dim_Clientes: Con link directo a Maps e ID Red Azul
     const hojaClientes = clientesAExportar.map(c => {
       const obrasCliente = obras.filter(o => o.clienteId === c.id);
       const obrasIds = obrasCliente.map(o => o.id);
@@ -504,12 +557,11 @@ export default function App() {
         total_obras_asociadas: obrasCliente.length,
         total_cotizado_mxn: totalCotizado,
         total_vendido_mxn: totalVendido,
-        link_ubicacion_maps: linkGoogleMaps, // Enlace clickeable directo
+        link_ubicacion_maps: linkGoogleMaps,
         direccion_fiscal: c.direccion || ''
       };
     });
 
-    // 2. Dim_Obras: Con link directo a Maps
     const hojaObras = obrasAExportar.map(o => {
       const cli = clientes.find(c => c.id === o.clienteId);
       const visObra = visitas.filter(v => v.obraId === o.id);
@@ -547,12 +599,11 @@ export default function App() {
         id_fecha_ultima_visita: fInfo.id_fecha,
         total_cotizado_mxn: totalCotizado,
         total_vendido_mxn: totalVendido,
-        link_ubicacion_maps: linkGoogleMapsObra, // Enlace clickeable directo
+        link_ubicacion_maps: linkGoogleMapsObra,
         direccion: o.direccion || ''
       };
     });
 
-    // 3. Fact_Visitas: Con links directos a las fotos en lugar de solo el conteo
     const hojaVisitas = visitas
       .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
       .map(v => {
@@ -576,16 +627,15 @@ export default function App() {
           actividad: v.actividad,
           distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
           estado_auditoria_gps: v.auditoriaEstado || 'remoto',
-          link_gps_auditoria: linkGpsVisita, // Enlace clickeable a Maps
-          link_foto_1: fotosLista[0] || 'SIN FOTO', // Abre la foto con 1 clic
+          link_gps_auditoria: linkGpsVisita,
+          link_foto_1: fotosLista[0] || 'SIN FOTO',
           link_foto_2: fotosLista[1] || '',
           link_foto_3: fotosLista[2] || '',
-          todos_los_links_fotos: fotosLista.join(' | '), // Todos los links juntos
+          todos_los_links_fotos: fotosLista.join(' | '),
           observaciones: v.observaciones || ''
         };
       });
 
-    // 4. Fact_Movimientos: Con link al documento o remisión adjunta
     const obrasIdsValidas = obrasAExportar.map(o => o.id);
     const hojaMovimientos = movimientos
       .filter(m => obrasIdsValidas.includes(m.obraId))
@@ -608,7 +658,7 @@ export default function App() {
           id_fecha: fInfo.id_fecha,
           hora_registro: fInfo.hora,
           cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
-          link_documento_adjunto: linkDoc // Abre el PDF o remisión con 1 clic
+          link_documento_adjunto: linkDoc
         };
       });
 
@@ -620,6 +670,7 @@ export default function App() {
 
     const fechaHoy = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(libro, `PowerBI_Prospeccion_OBS_${filtroSucursal}_${fechaHoy}.xlsx`);
+    notificarToast('📊 Reporte Excel Power BI generado', 'exito');
   };
 
   const hoyStr = new Date().toISOString().slice(0, 10);
@@ -646,6 +697,30 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[58px] sm:pt-[70px] font-sans">
       
+      {/* CONTENEDOR DE NOTIFICACIONES TOAST NATIVAS */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4">
+        {toasts.map(t => (
+          <div
+            key={t.id}
+            className={`pointer-events-auto px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-2.5 text-xs sm:text-sm font-black animate-in fade-in slide-in-from-top duration-200 backdrop-blur-xl ${
+              t.tipo === 'exito'
+                ? 'bg-[#000b26]/95 text-emerald-300 border-emerald-500/50 shadow-emerald-950/40'
+                : t.tipo === 'error'
+                ? 'bg-[#000b26]/95 text-rose-300 border-rose-500/50 shadow-rose-950/40'
+                : t.tipo === 'advertencia'
+                ? 'bg-[#000b26]/95 text-amber-300 border-amber-500/50 shadow-amber-950/40'
+                : 'bg-[#000b26]/95 text-blue-300 border-[#0091FB]/50 shadow-blue-950/40'
+            }`}
+          >
+            {t.tipo === 'exito' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+            {t.tipo === 'error' && <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />}
+            {t.tipo === 'advertencia' && <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />}
+            {t.tipo === 'info' && <Info className="w-4 h-4 text-[#0091FB] shrink-0" />}
+            <span className="truncate">{t.mensaje}</span>
+          </div>
+        ))}
+      </div>
+
       {/* HEADER */}
       <Header 
         gpsEstado={gpsEstado} 
