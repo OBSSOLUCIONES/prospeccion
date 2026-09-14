@@ -1,7 +1,8 @@
 // src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { AlertTriangle, MapPin, Zap, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { AlertTriangle, MapPin, Zap, CheckCircle2, AlertCircle, Info, Compass } from 'lucide-react';
+import { App as CapApp } from '@capacitor/app';
 
 import { 
   CLIENTES_INICIALES, 
@@ -102,6 +103,9 @@ export default function App() {
   const [tab, setTab] = useState('pipeline');
   const [mostrarSplash, setMostrarSplash] = useState(true);
   
+  // MODAL DE CONFIRMACIÓN AL SALIR DE LA APP
+  const [modalConfirmarSalida, setModalConfirmarSalida] = useState(false);
+
   // SISTEMA DE TOASTS NATIVOS
   const [toasts, setToasts] = useState([]);
 
@@ -208,7 +212,56 @@ export default function App() {
     itemAEliminar
   );
 
-  // SCREEN WAKELOCK NATIVO: Evita que la pantalla se apague sola en campo o vehículo [1]
+  // CONTROL INTELIGENTE DEL BOTÓN DE RETROCESO EN ANDROID
+  useEffect(() => {
+    let listener = null;
+
+    const inicializarBotonAtras = async () => {
+      try {
+        listener = await CapApp.addListener('backButton', () => {
+          // 1. Si hay alguna ventana emergente abierta, cerrarla primero
+          if (modalConfirmarSalida) { setModalConfirmarSalida(false); return; }
+          if (visorModal) { setVisorModal(null); return; }
+          if (destinoRuta) { setDestinoRuta(null); return; }
+          if (mapaPickerConfig) { setMapaPickerConfig(null); return; }
+          if (itemAEliminar) { setItemAEliminar(null); return; }
+          if (modalVisitaAbierto) { setModalVisitaAbierto(false); setVisitaAEditar(null); return; }
+          if (modalComercialAbierto) { setModalComercialAbierto(false); return; }
+          if (modalObraAbierto) { setModalObraAbierto(false); return; }
+          if (modalCliente) { setModalCliente(false); return; }
+          if (modalKpisAbierto) { setModalKpisAbierto(false); return; }
+          if (obraSeleccionada) { setObraSeleccionada(null); return; }
+
+          // 2. Si no hay nada abierto, pedir confirmación antes de salir
+          setModalConfirmarSalida(true);
+        });
+      } catch (err) {
+        console.warn('Capacitor App plugin no disponible:', err);
+      }
+    };
+
+    inicializarBotonAtras();
+
+    return () => {
+      if (listener && listener.remove) {
+        listener.remove();
+      }
+    };
+  }, [
+    modalConfirmarSalida, visorModal, destinoRuta, mapaPickerConfig,
+    itemAEliminar, modalVisitaAbierto, modalComercialAbierto,
+    modalObraAbierto, modalCliente, modalKpisAbierto, obraSeleccionada
+  ]);
+
+  const handleCerrarAppDefinitivo = () => {
+    try {
+      CapApp.exitApp();
+    } catch {
+      window.close();
+    }
+  };
+
+  // Screen WakeLock
   useEffect(() => {
     let wakeLockInstance = null;
     const solicitarWakeLock = async () => {
@@ -216,7 +269,7 @@ export default function App() {
         try {
           wakeLockInstance = await navigator.wakeLock.request('screen');
         } catch (err) {
-          console.warn('WakeLock denegado o no soportado:', err);
+          console.warn('WakeLock no disponible:', err);
         }
       }
     };
@@ -697,7 +750,7 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[58px] sm:pt-[70px] font-sans">
       
-      {/* CONTENEDOR DE NOTIFICACIONES TOAST NATIVAS */}
+      {/* NOTIFICACIONES TOAST NATIVAS */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4">
         {toasts.map(t => (
           <div
@@ -998,6 +1051,43 @@ export default function App() {
                 onClick={ejecutarEliminacion}
                 className="w-full min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md shadow-rose-600/25 active:scale-95 transition-all">
                 Sí, Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL NATIVO DE CONFIRMACIÓN PARA SALIR DE LA APP (BOTÓN ATRÁS ANDROID)
+         ========================================================================= */}
+      {modalConfirmarSalida && (
+        <div className="fixed inset-0 z-[350] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-sm rounded-[28px] p-6 shadow-2xl space-y-4 border border-slate-200 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto shadow-sm">
+              <Compass className="w-7 h-7 text-[#0091FB] stroke-[2.4]" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base sm:text-lg font-black text-[#001757]">
+                ¿Deseas salir de PROSPECCIÓN OBS?
+              </h3>
+              <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                Tus datos y registros están respaldados de forma segura en la tablet.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setModalConfirmarSalida(false)}
+                className="min-h-[46px] rounded-xl border border-slate-300 text-slate-700 font-black text-xs hover:bg-slate-50 active:scale-95 transition-all">
+                Continuar en App
+              </button>
+              <button
+                type="button"
+                onClick={handleCerrarAppDefinitivo}
+                className="min-h-[46px] rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:brightness-105 text-white font-black text-xs shadow-md shadow-rose-600/30 active:scale-95 transition-all">
+                Sí, Salir
               </button>
             </div>
           </div>

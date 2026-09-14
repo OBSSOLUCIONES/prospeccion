@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">#001757</item>
+        <item name="colorPrimaryDark">#000b26</item>
+        <item name="colorAccent">#0091FB</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">#000b26</item>
+    </style>
+
+    <!-- Fondo de arranque idéntico a tu Splash Screen para evitar el pantallazo blanco -->
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+        <item name="android:background">#000b26</item>
+    </style>
+</resources>
