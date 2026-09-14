@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { FASES_OBRA, CAT_ACTIVIDAD_VISITA } from '../data/constants';
 import { subirArchivoSupabase } from '../lib/supabase';
+import { iniciarDictado } from '../lib/dictado';
 
 function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
@@ -47,8 +48,7 @@ export default function ModalVisita({
   const [subiendoArchivo, setSubiendoArchivo] = useState(false);
   const [grabandoVoz, setGrabandoVoz] = useState(false);
 
-  const recognitionRef = useRef(null);
-  const debeSeguirGrabandoRef = useRef(false);
+  const dictadoRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -67,65 +67,50 @@ export default function ModalVisita({
     }
 
     return () => {
-      debeSeguirGrabandoRef.current = false;
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
+      if (dictadoRef.current) {
+        try { dictadoRef.current.detener(); } catch (_) {}
+        dictadoRef.current = null;
       }
     };
   }, [obra, isOpen, visitaAEditar]);
 
   if (!isOpen || (!obra && !visitaAEditar)) return null;
 
-  const toggleDictadoVoz = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Tu navegador no soporta dictado por voz.');
-      return;
-    }
-
+  const toggleDictadoVoz = async () => {
     if (grabandoVoz) {
-      debeSeguirGrabandoRef.current = false;
-      setGrabandoVoz(false);
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
+      if (dictadoRef.current) {
+        await dictadoRef.current.detener();
+        dictadoRef.current = null;
       }
+      setGrabandoVoz(false);
       return;
     }
 
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'es-MX';
-      recognition.continuous = true;
-      recognition.interimResults = false;
-
-      debeSeguirGrabandoRef.current = true;
-      setGrabandoVoz(true);
-
-      recognition.onresult = (event) => {
-        let textoNuevo = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            textoNuevo += ' ' + event.results[i][0].transcript;
-          }
+    setGrabandoVoz(true);
+    const instancia = await iniciarDictado({
+      onTexto: (texto) => {
+        setObservaciones(prev => prev ? `${prev.trim()} ${texto}` : texto);
+      },
+      onError: (err) => {
+        console.warn('Error dictado:', err);
+        if (err === 'sin_soporte') {
+          alert('El dictado por voz no está disponible en este dispositivo');
         }
-        if (textoNuevo.trim()) {
-          setObservaciones(prev => prev ? `${prev.trim()} ${textoNuevo.trim().toUpperCase()}` : textoNuevo.trim().toUpperCase());
-        }
-      };
+        setGrabandoVoz(false);
+        dictadoRef.current = null;
+      },
+      onFin: () => {
+        setGrabandoVoz(false);
+        dictadoRef.current = null;
+      }
+    });
 
-      recognition.onend = () => {
-        if (debeSeguirGrabandoRef.current) {
-          try { recognition.start(); } catch (_) {}
-        } else {
-          setGrabandoVoz(false);
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch {
+    if (!instancia) {
       setGrabandoVoz(false);
+      return;
     }
+
+    dictadoRef.current = instancia;
   };
 
   const handleFotos = async (e) => {
@@ -147,9 +132,9 @@ export default function ModalVisita({
     e.preventDefault();
     if (subiendoArchivo) return;
 
-    debeSeguirGrabandoRef.current = false;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (_) {}
+    if (dictadoRef.current) {
+      try { dictadoRef.current.detener(); } catch (_) {}
+      dictadoRef.current = null;
     }
 
     const obraRef = obra || { id: visitaAEditar?.obraId, sucursal: visitaAEditar?.sucursal, lat: visitaAEditar?.latGpsReal, lng: visitaAEditar?.lngGpsReal };

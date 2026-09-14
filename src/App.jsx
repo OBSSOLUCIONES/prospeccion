@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import * as XLSX from 'xlsx';
 import { AlertTriangle, MapPin, Zap, CheckCircle2, AlertCircle, Info, Compass } from 'lucide-react';
 import { App as CapApp } from '@capacitor/app';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 import { 
   CLIENTES_INICIALES, 
@@ -103,10 +105,7 @@ export default function App() {
   const [tab, setTab] = useState('pipeline');
   const [mostrarSplash, setMostrarSplash] = useState(true);
   
-  // MODAL DE CONFIRMACIÓN AL SALIR DE LA APP
   const [modalConfirmarSalida, setModalConfirmarSalida] = useState(false);
-
-  // SISTEMA DE TOASTS NATIVOS
   const [toasts, setToasts] = useState([]);
 
   const agregarToast = useCallback((mensaje, tipo = 'info') => {
@@ -212,14 +211,13 @@ export default function App() {
     itemAEliminar
   );
 
-  // CONTROL INTELIGENTE DEL BOTÓN DE RETROCESO EN ANDROID
+  // Botón de retroceso de Android
   useEffect(() => {
     let listener = null;
 
     const inicializarBotonAtras = async () => {
       try {
         listener = await CapApp.addListener('backButton', () => {
-          // 1. Si hay alguna ventana emergente abierta, cerrarla primero
           if (modalConfirmarSalida) { setModalConfirmarSalida(false); return; }
           if (visorModal) { setVisorModal(null); return; }
           if (destinoRuta) { setDestinoRuta(null); return; }
@@ -232,7 +230,6 @@ export default function App() {
           if (modalKpisAbierto) { setModalKpisAbierto(false); return; }
           if (obraSeleccionada) { setObraSeleccionada(null); return; }
 
-          // 2. Si no hay nada abierto, pedir confirmación antes de salir
           setModalConfirmarSalida(true);
         });
       } catch (err) {
@@ -436,8 +433,19 @@ export default function App() {
           });
         }
       },
-      () => setGpsEstado('bloqueado'),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+            (error) => {
+        console.warn('GPS callback error:', error.code, error.message);
+        if (error.code === 1) {
+          setGpsEstado('bloqueado');
+        } else if (error.code === 2) {
+          setGpsEstado('buscando');
+        } else if (error.code === 3) {
+          setGpsEstado('calibrando');
+        } else {
+          setGpsEstado('buscando');
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
@@ -569,7 +577,10 @@ export default function App() {
     }
   };
 
-  const exportarAExcel = () => {
+  // =========================================================================
+  // EXPORTADOR POWER BI Y EXCEL (COMPATIBLE CON NAVEGADOR Y APK ANDROID)
+  // =========================================================================
+  const exportarAExcel = async () => {
     if (!esDirector) return;
 
     const obrasAExportar = filtroSucursal === 'TODAS'
@@ -580,6 +591,7 @@ export default function App() {
       ? clientes
       : clientes.filter(c => c.sucursal === filtroSucursal);
 
+    // 1. Dim_Clientes
     const hojaClientes = clientesAExportar.map(c => {
       const obrasCliente = obras.filter(o => o.clienteId === c.id);
       const obrasIds = obrasCliente.map(o => o.id);
@@ -615,6 +627,7 @@ export default function App() {
       };
     });
 
+    // 2. Dim_Obras
     const hojaObras = obrasAExportar.map(o => {
       const cli = clientes.find(c => c.id === o.clienteId);
       const visObra = visitas.filter(v => v.obraId === o.id);
@@ -657,6 +670,7 @@ export default function App() {
       };
     });
 
+    // 3. Fact_Visitas
     const hojaVisitas = visitas
       .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
       .map(v => {
@@ -689,6 +703,7 @@ export default function App() {
         };
       });
 
+    // 4. Fact_Movimientos
     const obrasIdsValidas = obrasAExportar.map(o => o.id);
     const hojaMovimientos = movimientos
       .filter(m => obrasIdsValidas.includes(m.obraId))
@@ -722,8 +737,31 @@ export default function App() {
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaMovimientos), 'Fact_Movimientos');
 
     const fechaHoy = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(libro, `PowerBI_Prospeccion_OBS_${filtroSucursal}_${fechaHoy}.xlsx`);
-    notificarToast('📊 Reporte Excel Power BI generado', 'exito');
+    const nombreArchivo = `PowerBI_Prospeccion_OBS_${filtroSucursal}_${fechaHoy}.xlsx`;
+
+    // DETECCIÓN Y GUARDADO EN ANDROID NATIVO (SHARE SHEET)
+    try {
+      const base64Data = XLSX.write(libro, { bookType: 'xlsx', type: 'base64' });
+      
+      const archivoGuardado = await Filesystem.writeFile({
+        path: nombreArchivo,
+        data: base64Data,
+        directory: Directory.Cache
+      });
+
+      await Share.share({
+        title: 'Reporte Excel Power BI',
+        text: `Reporte de Obras y Clientes (${filtroSucursal}) - PROSPECCIÓN OBS`,
+        url: archivoGuardado.uri,
+        dialogTitle: 'Guardar o Compartir Reporte Excel'
+      });
+
+      notificarToast('📊 Reporte generado con éxito', 'exito');
+    } catch (errNativo) {
+      // Fallback para PC / Navegador
+      XLSX.writeFile(libro, nombreArchivo);
+      notificarToast('📊 Reporte Excel descargado', 'exito');
+    }
   };
 
   const hoyStr = new Date().toISOString().slice(0, 10);
@@ -1057,9 +1095,7 @@ export default function App() {
         </div>
       )}
 
-      {/* =========================================================================
-          MODAL NATIVO DE CONFIRMACIÓN PARA SALIR DE LA APP (BOTÓN ATRÁS ANDROID)
-         ========================================================================= */}
+      {/* CONFIRMACIÓN DE SALIDA */}
       {modalConfirmarSalida && (
         <div className="fixed inset-0 z-[350] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-[28px] p-6 shadow-2xl space-y-4 border border-slate-200 text-center">

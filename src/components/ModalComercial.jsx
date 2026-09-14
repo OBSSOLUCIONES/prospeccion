@@ -1,4 +1,3 @@
-// src/components/ModalComercial.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, DollarSign, UploadCloud, Check, Loader2, Trash2, 
@@ -6,6 +5,7 @@ import {
 } from 'lucide-react';
 import { CAT_FORMA_PAGO, CAT_TIPO_ENTREGA } from '../data/constants';
 import { subirArchivoSupabase } from '../lib/supabase';
+import { iniciarDictado } from '../lib/dictado';
 
 const obtenerFechaHoraActual = () => {
   const ahora = new Date();
@@ -33,24 +33,21 @@ export default function ModalComercial({
   movimientos = [], 
   onSave 
 }) {
-  const [tipo, setTipo] = useState(tipoDefault); // 'COTIZACION' | 'VENTA'
-  const [comprobanteVenta, setComprobanteVenta] = useState('REMISIÓN'); // 'REMISIÓN' | 'FACTURA'
+  const [tipo, setTipo] = useState(tipoDefault);
+  const [comprobanteVenta, setComprobanteVenta] = useState('REMISIÓN');
   const [cotizacionSeleccionadaId, setCotizacionSeleccionadaId] = useState('');
   const [folio, setFolio] = useState('');
   const [monto, setMonto] = useState('');
   const [formaPago, setFormaPago] = useState('EFECTIVO');
   const [tipoEntrega, setTipoEntrega] = useState('DOMICILIO');
   const [fecha, setFecha] = useState(obtenerFechaHoraActual());
-  const [observaciones, setObservaciones] = useState(''); // SIEMPRE LIMPIO
+  const [observaciones, setObservaciones] = useState('');
   const [documentoAdjunto, setDocumentoAdjunto] = useState(null);
   const [subiendo, setSubiendo] = useState(false);
 
-  // Dictado por voz
   const [grabandoVoz, setGrabandoVoz] = useState(false);
-  const recognitionRef = useRef(null);
-  const debeSeguirGrabandoRef = useRef(false);
+  const dictadoRef = useRef(null);
 
-  // REINICIO TOTAL CADA VEZ QUE SE ABRE (NUNCA GUARDA BASURA ANTERIOR)
   useEffect(() => {
     if (isOpen) {
       setTipo(tipoDefault);
@@ -61,16 +58,16 @@ export default function ModalComercial({
       setFormaPago('EFECTIVO');
       setTipoEntrega('DOMICILIO');
       setFecha(obtenerFechaHoraActual());
-      setObservaciones(''); // Observaciones 100% vacías por defecto
+      setObservaciones('');
       setDocumentoAdjunto(null);
       setSubiendo(false);
       setGrabandoVoz(false);
     }
 
     return () => {
-      debeSeguirGrabandoRef.current = false;
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
+      if (dictadoRef.current) {
+        try { dictadoRef.current.detener(); } catch (_) {}
+        dictadoRef.current = null;
       }
     };
   }, [isOpen, tipoDefault]);
@@ -79,20 +76,17 @@ export default function ModalComercial({
 
   const esVenta = tipo === 'VENTA';
 
-  // Obtener cotizaciones de esta obra para poder enlazarlas
   const cotizacionesObra = movimientos.filter(m => 
     m.obraId === obra.id && 
     m.tipo === 'COTIZACION'
   );
 
-  // Al elegir una cotización en el desplegable
   const handleCambiarCotizacionEnlace = (cotId) => {
     setCotizacionSeleccionadaId(cotId);
     if (!cotId) return;
 
     const cotEncontrada = cotizacionesObra.find(c => c.id === cotId);
     if (cotEncontrada) {
-      // Autocompleta el monto para ahorrar tiempo, pero deja observaciones limpias
       setMonto(cotEncontrada.monto || '');
       if (cotEncontrada.tipoEntrega) {
         setTipoEntrega(cotEncontrada.tipoEntrega);
@@ -100,56 +94,41 @@ export default function ModalComercial({
     }
   };
 
-  const toggleDictadoVoz = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Tu navegador o dispositivo no soporta dictado por voz.');
-      return;
-    }
-
+  const toggleDictadoVoz = async () => {
     if (grabandoVoz) {
-      debeSeguirGrabandoRef.current = false;
-      setGrabandoVoz(false);
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
+      if (dictadoRef.current) {
+        await dictadoRef.current.detener();
+        dictadoRef.current = null;
       }
+      setGrabandoVoz(false);
       return;
     }
 
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'es-MX';
-      recognition.continuous = true;
-      recognition.interimResults = false;
-
-      debeSeguirGrabandoRef.current = true;
-      setGrabandoVoz(true);
-
-      recognition.onresult = (event) => {
-        let textoNuevo = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            textoNuevo += ' ' + event.results[i][0].transcript;
-          }
+    setGrabandoVoz(true);
+    const instancia = await iniciarDictado({
+      onTexto: (texto) => {
+        setObservaciones(prev => prev ? `${prev.trim()} ${texto}` : texto);
+      },
+      onError: (err) => {
+        console.warn('Error dictado:', err);
+        if (err === 'sin_soporte') {
+          alert('El dictado por voz no está disponible en este dispositivo');
         }
-        if (textoNuevo.trim()) {
-          setObservaciones(prev => prev ? `${prev.trim()} ${textoNuevo.trim().toUpperCase()}` : textoNuevo.trim().toUpperCase());
-        }
-      };
+        setGrabandoVoz(false);
+        dictadoRef.current = null;
+      },
+      onFin: () => {
+        setGrabandoVoz(false);
+        dictadoRef.current = null;
+      }
+    });
 
-      recognition.onend = () => {
-        if (debeSeguirGrabandoRef.current) {
-          try { recognition.start(); } catch (_) {}
-        } else {
-          setGrabandoVoz(false);
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch {
+    if (!instancia) {
       setGrabandoVoz(false);
+      return;
     }
+
+    dictadoRef.current = instancia;
   };
 
   const handleDocumento = async (e) => {
@@ -174,9 +153,9 @@ export default function ModalComercial({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    debeSeguirGrabandoRef.current = false;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (_) {}
+    if (dictadoRef.current) {
+      try { dictadoRef.current.detener(); } catch (_) {}
+      dictadoRef.current = null;
     }
 
     const montoLimpio = parseFloat(String(monto).replace(/[^0-9.]/g, '')) || 0;
@@ -203,7 +182,6 @@ export default function ModalComercial({
     <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
       <div className="w-full sm:max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
         
-        {/* Barra de arrastre táctil */}
         <div className="pt-2 pb-1 sm:hidden">
           <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
         </div>
@@ -253,7 +231,6 @@ export default function ModalComercial({
           {esVenta && (
             <div className="space-y-3 p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl animate-in fade-in duration-150">
               
-              {/* Tipo de comprobante */}
               <div>
                 <label className="block font-black text-emerald-950 text-[11px] uppercase tracking-wider mb-1.5">
                   Tipo de Comprobante de Venta *
@@ -285,7 +262,6 @@ export default function ModalComercial({
                 </div>
               </div>
 
-              {/* Selector para enlazar cotización previa de esta obra */}
               <div className="pt-2 border-t border-emerald-200/80">
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-black text-emerald-950 text-xs flex items-center gap-1">
@@ -389,7 +365,7 @@ export default function ModalComercial({
             />
           </div>
 
-          {/* OBSERVACIONES LIMPIAS (SIN TEXTO BASURA) + BOTÓN DE VOZ */}
+          {/* OBSERVACIONES + BOTÓN DE VOZ */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="font-black text-slate-800 text-xs">
