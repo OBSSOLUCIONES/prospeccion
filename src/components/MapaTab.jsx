@@ -1,8 +1,8 @@
 // src/components/MapaTab.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Navigation, Radio, Layers, Crosshair, Route, Users, MapPin } from 'lucide-react';
+import { Navigation, Radio, Layers, Crosshair, Route } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
 const SUCURSAL_COORDS = {
@@ -111,7 +111,8 @@ export default function MapaTab({
   filtroSucursal, 
   setFiltroSucursal,
   asesoresEnVivo = [],
-  usuarioActivo
+  usuarioActivo,
+  deviceId
 }) {
   const [verObras, setVerObras] = useState(true);
   const [verClientes, setVerClientes] = useState(true);
@@ -124,13 +125,37 @@ export default function MapaTab({
   const obrasPorSucursal = obras.filter(o => filtroSucursal === 'TODAS' || o.sucursal === filtroSucursal);
   const clientesPorSucursal = clientes.filter(c => filtroSucursal === 'TODAS' || c.sucursal === filtroSucursal);
 
-  // Filtrar asesores en vivo (mostrando a los de la sucursal o todos)
+  // FILTRO ANTI-DUPLICADOS Y ANTI-FANTASMAS
   const asesoresFiltrados = useMemo(() => {
-    return asesoresEnVivo
+    const ahora = Date.now();
+    const LIMITE_ACTIVO_MS = 4 * 60 * 60 * 1000; // Máximo 4 horas de inactividad
+
+    const activos = asesoresEnVivo
       .filter(a => a.lat && a.lng)
+      // 1. Ocultar posiciones viejas de días u horas anteriores
+      .filter(a => {
+        if (!a.updated_at) return true;
+        const tiempoReporte = new Date(a.updated_at).getTime();
+        return (ahora - tiempoReporte) < LIMITE_ACTIVO_MS;
+      })
       .filter(a => filtroSucursal === 'TODAS' || a.sucursal === filtroSucursal)
-      .filter(a => a.usuario_id !== usuarioActivo?.id);
-  }, [asesoresEnVivo, filtroSucursal, usuarioActivo]);
+      // 2. Ocultar tu propio usuario activo actual (ya se dibuja como 'Tu Terminal')
+      .filter(a => a.usuario_id !== usuarioActivo?.id)
+      // 3. Ocultar si el registro vino de este mismo dispositivo físico
+      .filter(a => !deviceId || !a.device_id || a.device_id !== deviceId);
+
+    // 4. Deduplicar por nombre: solo conservar la posición más reciente de cada persona
+    const mapaUnicos = new Map();
+    for (const a of activos) {
+      const clave = a.nombre || a.usuario_id;
+      const existente = mapaUnicos.get(clave);
+      if (!existente || new Date(a.updated_at) > new Date(existente.updated_at)) {
+        mapaUnicos.set(clave, a);
+      }
+    }
+
+    return Array.from(mapaUnicos.values());
+  }, [asesoresEnVivo, filtroSucursal, usuarioActivo, deviceId]);
 
   const obrasConCoordenadas = obrasPorSucursal
     .filter(o => o.lat && o.lng)
@@ -159,7 +184,6 @@ export default function MapaTab({
     }
   };
 
-  // Vuelo directo a donde están los gestores
   const handleEnfocarGestores = () => {
     if (asesoresFiltrados.length > 0) {
       const primerGestor = asesoresFiltrados[0];
@@ -193,7 +217,7 @@ export default function MapaTab({
             <div>
               <p className="font-black text-[#001757] text-xs">Monitor Territorial en Tiempo Real</p>
               <p className="text-slate-400 text-[10px] font-bold">
-                Gestores detectados: <strong className="text-[#0091FB]">{asesoresFiltrados.length}</strong> • Obras: <strong className="text-emerald-600">{obrasConCoordenadas.length}</strong>
+                Gestores activos ahora: <strong className="text-[#0091FB]">{asesoresFiltrados.length}</strong> • Obras: <strong className="text-emerald-600">{obrasConCoordenadas.length}</strong>
               </p>
             </div>
           </div>
@@ -302,19 +326,19 @@ export default function MapaTab({
             />
           )}
 
-          {/* Marcador de Tu Ubicación */}
+          {/* Marcador Único de Tu Terminal Actual */}
           {tabletPos?.lat && tabletPos?.lng && (
             <Marker position={[tabletPos.lat, tabletPos.lng]} icon={tuDispositivoIcon}>
               <Popup>
                 <div className="text-xs font-bold text-slate-800">
-                  <p className="text-[#0091FB] font-black">Tu Terminal</p>
+                  <p className="text-[#0091FB] font-black">Tu Terminal Actual</p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Precisión: ±{tabletPos.accuracy}m</p>
                 </div>
               </Popup>
             </Marker>
           )}
 
-          {/* MARCADORES DE GESTORES EN VIVO */}
+          {/* ASESORES ACTIVOS EN VIVO (SIN DUPLICADOS) */}
           {!modoRutaFlotilla && verAsesores && asesoresFiltrados.map((asesor) => (
             <Marker 
               key={`asesor-${asesor.usuario_id}`} 

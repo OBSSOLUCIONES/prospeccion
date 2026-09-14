@@ -41,12 +41,8 @@ const obtenerClienteSupabaseUnico = () => {
 
 export const supabase = obtenerClienteSupabaseUnico();
 
-// =========================================================================
-// UTILIDAD: EXTRAER RUTA INTERNA DEL BUCKET DESDE UNA URL PÚBLICA
-// =========================================================================
 function extraerRutaStorage(url, bucket = 'evidencias-obras') {
   if (!url || typeof url !== 'string') return null;
-  // Si es base64 o no pertenece a Supabase Storage, no se procesa
   if (url.startsWith('data:image/') || !url.includes('/storage/v1/object/public/')) {
     if (url.startsWith('fotos/') || url.startsWith('documentos/')) return url;
     return null;
@@ -59,7 +55,6 @@ function extraerRutaStorage(url, bucket = 'evidencias-obras') {
   return null;
 }
 
-// Borrar lista de archivos del bucket evidencias-obras
 async function eliminarArchivosFisicosStorage(listaUrls = []) {
   if (!supabase || !listaUrls.length) return;
   const rutas = listaUrls
@@ -69,17 +64,12 @@ async function eliminarArchivosFisicosStorage(listaUrls = []) {
   if (!rutas.length) return;
 
   try {
-    const { error } = await supabase.storage
+    await supabase.storage
       .from('evidencias-obras')
       .remove(rutas);
-
-    if (error) {
-      console.warn('Aviso borrando archivos físicos de Storage:', error.message);
-    } else {
-      console.log(`✅ ${rutas.length} archivo(s) eliminados físicamente del Storage:`, rutas);
-    }
+    console.log(`✅ ${rutas.length} archivo(s) eliminados del Storage`);
   } catch (err) {
-    console.warn('Fallo al conectar con Storage para eliminar archivos:', err);
+    console.warn('Aviso borrando archivos de Storage:', err);
   }
 }
 
@@ -385,7 +375,7 @@ export async function eliminarClienteDB(id) {
 }
 
 // ==========================================
-// CRUD OBRAS (CON ELIMINACIÓN DE FOTOS Y ARCHIVOS DEL STORAGE)
+// CRUD OBRAS
 // ==========================================
 export async function obtenerObrasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -441,7 +431,6 @@ export async function guardarObraDB(obra) {
   }
 }
 
-// BORRADO MAESTRO DE OBRA: Elimina imágenes de visitas, documentos de ventas y registros
 export async function eliminarObraDB(id, contextoLocal = {}) {
   const idLimpio = String(id).trim().toUpperCase();
 
@@ -453,7 +442,6 @@ export async function eliminarObraDB(id, contextoLocal = {}) {
   try {
     let urlsAEliminar = [];
 
-    // 1. Recolectar URLs desde el contexto local si existen
     if (Array.isArray(contextoLocal.visitas)) {
       contextoLocal.visitas.forEach(v => {
         if (Array.isArray(v.fotos)) urlsAEliminar.push(...v.fotos);
@@ -465,7 +453,6 @@ export async function eliminarObraDB(id, contextoLocal = {}) {
       });
     }
 
-    // 2. Consultar en Supabase para asegurar cualquier archivo no cargado localmente
     const [{ data: visitasDB }, { data: movsDB }] = await Promise.all([
       supabase.from('visitas').select('fotos').eq('obra_id', idLimpio),
       supabase.from('movimientos_comerciales').select('documento_adjunto').eq('obra_id', idLimpio)
@@ -483,12 +470,10 @@ export async function eliminarObraDB(id, contextoLocal = {}) {
       });
     }
 
-    // 3. ELIMINAR FOTOS Y DOCUMENTOS FÍSICOS DEL STORAGE DE SUPABASE
     if (urlsAEliminar.length > 0) {
       await eliminarArchivosFisicosStorage(urlsAEliminar);
     }
 
-    // 4. ELIMINAR REGISTROS DE BASE DE DATOS EN CASCADA
     await supabase.from('movimientos_comerciales').delete().eq('obra_id', idLimpio);
     await supabase.from('visitas').delete().eq('obra_id', idLimpio);
     const { error } = await supabase.from('obras').delete().eq('id', idLimpio);
@@ -497,7 +482,7 @@ export async function eliminarObraDB(id, contextoLocal = {}) {
       alert(`⚠️ Error eliminando obra en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
     } else {
-      console.log('✅ Obra, visitas, documentos y fotos eliminados por completo de Supabase:', idLimpio);
+      console.log('✅ Obra y archivos eliminados de Supabase:', idLimpio);
     }
   } catch (err) {
     await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
@@ -505,7 +490,7 @@ export async function eliminarObraDB(id, contextoLocal = {}) {
 }
 
 // ==========================================
-// CRUD VISITAS (CON ELIMINACIÓN DE FOTOS FÍSICAS)
+// CRUD VISITAS
 // ==========================================
 export async function obtenerVisitasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -564,7 +549,6 @@ export async function guardarVisitaDB(visita) {
   }
 }
 
-// Borrar visita individual y sus fotos de Storage
 export async function eliminarVisitaDB(id, fotosLocales = []) {
   const idLimpio = String(id).trim().toUpperCase();
   if (!supabase || !navigator.onLine) {
@@ -572,7 +556,6 @@ export async function eliminarVisitaDB(id, fotosLocales = []) {
     return;
   }
   try {
-    // 1. Borrar fotos de Storage
     let fotosABorrar = Array.isArray(fotosLocales) ? [...fotosLocales] : [];
     const { data: visitaDB } = await supabase.from('visitas').select('fotos').eq('id', idLimpio).maybeSingle();
     if (visitaDB && Array.isArray(visitaDB.fotos)) {
@@ -582,7 +565,6 @@ export async function eliminarVisitaDB(id, fotosLocales = []) {
       await eliminarArchivosFisicosStorage(fotosABorrar);
     }
 
-    // 2. Borrar registro
     const { error } = await supabase.from('visitas').delete().eq('id', idLimpio);
     if (error) {
       alert(`⚠️ Error eliminando visita en Supabase: ${error.message}`);
@@ -656,20 +638,22 @@ export async function guardarMovimientoDB(mov) {
 }
 
 // ==========================================
-// RASTREO SATELITAL Y FLOTA EN VIVO
+// RASTREO SATELITAL CON HUELLA DE DISPOSITIVO
 // ==========================================
-export async function transmitirPosicionDB({ usuarioId, nombre, sucursal, lat, lng, accuracy }) {
+export async function transmitirPosicionDB({ usuarioId, nombre, sucursal, lat, lng, accuracy, deviceId }) {
   if (!supabase || !usuarioId || !navigator.onLine) return;
   try {
-    await supabase.from('posiciones_en_vivo').upsert({
+    const fila = {
       usuario_id: usuarioId,
       nombre,
       sucursal,
       lat: Number(lat),
       lng: Number(lng),
       accuracy: Number(accuracy) || 10,
+      device_id: deviceId || null,
       updated_at: new Date().toISOString()
-    });
+    };
+    await ejecutarUpsertSeguro('posiciones_en_vivo', fila);
   } catch (err) {
     console.warn('Fallo transmitiendo ubicación:', err);
   }

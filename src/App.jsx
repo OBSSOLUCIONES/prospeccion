@@ -104,6 +104,16 @@ export default function App() {
   const [estaOnline, setEstaOnline] = useState(navigator.onLine);
   const [pendientesOffline, setPendientesOffline] = useState(0);
 
+  // Huella digital única del dispositivo físico (evita duplicar la tablet)
+  const deviceIdRef = useRef((() => {
+    let id = localStorage.getItem('obs_dispositivo_id');
+    if (!id) {
+      id = 'DEV-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+      localStorage.setItem('obs_dispositivo_id', id);
+    }
+    return id;
+  })());
+
   const [usuarioActivo, setUsuarioActivo] = useState(() => {
     const local = localStorage.getItem('app_obras_usuario_activo');
     return local ? JSON.parse(local) : null;
@@ -286,6 +296,7 @@ export default function App() {
     }
   }, [usuarioActivo]);
 
+  // Transmisión GPS con DeviceId único
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGpsEstado('bloqueado');
@@ -312,7 +323,8 @@ export default function App() {
             sucursal: usuarioActivo.sucursal,
             lat: nuevaPos.lat,
             lng: nuevaPos.lng,
-            accuracy: precision
+            accuracy: precision,
+            deviceId: deviceIdRef.current
           });
         }
       },
@@ -348,13 +360,11 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // ELIMINACIÓN DESTRUCTIVA TOTAL (LIMPIA BASE DE DATOS Y STORAGE)
   const ejecutarEliminacion = async () => {
     if (!itemAEliminar) return;
 
     if (itemAEliminar.tipo === 'obra') {
       const id = itemAEliminar.data.id;
-      // Guardar contexto local de fotos y documentos para asegurar su borrado
       const visitasObra = visitas.filter(v => v.obraId === id);
       const movsObra = movimientos.filter(m => m.obraId === id);
 
@@ -399,7 +409,6 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // Borrado de visita individual y sus fotos
   const handleEliminarVisita = async (visitaId) => {
     const idLimpio = String(visitaId).trim().toUpperCase();
     const visitaABorrar = visitas.find(v => v.id === idLimpio);
@@ -719,6 +728,7 @@ export default function App() {
           />
         )}
 
+        {/* PESTAÑA MAPA CONECTADA AL DISPOSITIVO */}
         {tab === 'mapa' && esDirector && (
           <MapaTab 
             tabletPos={tabletPos}
@@ -730,6 +740,7 @@ export default function App() {
             setFiltroSucursal={setFiltroSucursal}
             asesoresEnVivo={asesoresEnVivo}
             usuarioActivo={usuarioActivo}
+            deviceId={deviceIdRef.current}
           />
         )}
       </main>
