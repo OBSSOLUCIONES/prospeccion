@@ -8,18 +8,23 @@ const esNativo = Capacitor.isNativePlatform();
 let listenersListos = false;
 let onTextoGlobal = null;
 let onErrorGlobal = null;
+let ultimoTextoEmitido = '';
 
 async function asegurarListeners() {
   if (listenersListos || !esNativo) return;
   try {
-    await DictadoNativo.addListener('dictadoParcial', (data) => {
-      if (data.texto && onTextoGlobal) onTextoGlobal(data.texto);
-    });
+    // Solo escuchamos dictadoFinal, NO dictadoParcial (causa duplicación)
     await DictadoNativo.addListener('dictadoFinal', (data) => {
-      if (data.texto && onTextoGlobal) onTextoGlobal(data.texto);
+      if (!data || !data.texto) return;
+      const textoLimpio = String(data.texto).trim().toUpperCase();
+      if (!textoLimpio) return;
+      // Filtro anti-duplicado consecutivo
+      if (textoLimpio === ultimoTextoEmitido) return;
+      ultimoTextoEmitido = textoLimpio;
+      if (onTextoGlobal) onTextoGlobal(textoLimpio);
     });
     await DictadoNativo.addListener('dictadoError', (data) => {
-      if (onErrorGlobal) onErrorGlobal(data.code);
+      if (onErrorGlobal) onErrorGlobal(data && data.code);
     });
     listenersListos = true;
   } catch (err) {
@@ -28,6 +33,7 @@ async function asegurarListeners() {
 }
 
 export async function iniciarDictado({ onTexto, onError, onFin }) {
+  ultimoTextoEmitido = '';
   if (esNativo) {
     try {
       onTextoGlobal = onTexto;
@@ -37,6 +43,7 @@ export async function iniciarDictado({ onTexto, onError, onFin }) {
       return {
         detener: async () => {
           try { await DictadoNativo.detener(); } catch (_) {}
+          ultimoTextoEmitido = '';
           if (onFin) onFin();
         }
       };
@@ -58,18 +65,23 @@ function iniciarDictadoWeb({ onTexto, onError, onFin }) {
   const recognition = new SR();
   recognition.lang = 'es-MX';
   recognition.continuous = true;
-  recognition.interimResults = false;
+  recognition.interimResults = false; // Solo resultados finales
+  recognition.maxAlternatives = 1;
 
   let activo = true;
+  let ultimoTextoWeb = '';
 
   recognition.onresult = (event) => {
-    let texto = '';
+    // Solo procesar el último resultado final (evita duplicación al acumular)
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       if (event.results[i].isFinal) {
-        texto += ' ' + event.results[i][0].transcript;
+        const texto = event.results[i][0].transcript.trim().toUpperCase();
+        if (texto && texto !== ultimoTextoWeb) {
+          ultimoTextoWeb = texto;
+          if (onTexto) onTexto(texto);
+        }
       }
     }
-    if (texto.trim() && onTexto) onTexto(texto.trim().toUpperCase());
   };
 
   recognition.onerror = (e) => {
@@ -100,6 +112,7 @@ function iniciarDictadoWeb({ onTexto, onError, onFin }) {
     detener: () => {
       activo = false;
       try { recognition.stop(); } catch (_) {}
+      ultimoTextoWeb = '';
     }
   };
 }

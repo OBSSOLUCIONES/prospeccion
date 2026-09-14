@@ -8,6 +8,7 @@ import android.os.Looper;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.widget.Toast;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -34,18 +35,68 @@ public class DictadoNativoPlugin extends Plugin {
     private SpeechRecognizer speechRecognizer;
     private Intent speechIntent;
     private boolean escuchandoActivo = false;
+    private boolean deteniendoManualmente = false;
+    private boolean cicloEnCurso = false;
+    private String ultimoTextoEmitido = "";
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Runnable reinicioPendiente = null;
+
+    private String traducirError(int code) {
+        switch (code) {
+            case SpeechRecognizer.ERROR_AUDIO: return "AUDIO (fallo grabando)";
+            case SpeechRecognizer.ERROR_CLIENT: return "CLIENT (sesion chocada - normal)";
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: return "PERMISOS INSUFICIENTES";
+            case SpeechRecognizer.ERROR_NETWORK: return "RED (sin internet)";
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: return "RED TIMEOUT";
+            case SpeechRecognizer.ERROR_NO_MATCH: return "SIN COINCIDENCIA";
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: return "MOTOR OCUPADO";
+            case SpeechRecognizer.ERROR_SERVER: return "SERVIDOR GOOGLE FALLO";
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: return "SIN HABLA";
+            case SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED: return "IDIOMA NO SOPORTADO";
+            case SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE: return "IDIOMA NO DISPONIBLE";
+            default: return "DESCONOCIDO (" + code + ")";
+        }
+    }
+
+    private void cancelarReinicioPendiente() {
+        if (reinicioPendiente != null) {
+            mainHandler.removeCallbacks(reinicioPendiente);
+            reinicioPendiente = null;
+        }
+    }
+
+    private void programarReinicio(int delayMs) {
+        cancelarReinicioPendiente();
+        reinicioPendiente = () -> {
+            reinicioPendiente = null;
+            if (escuchandoActivo && !deteniendoManualmente) {
+                escucharInterno();
+            }
+        };
+        mainHandler.postDelayed(reinicioPendiente, delayMs);
+    }
 
     @Override
     public void load() {
+        if (!SpeechRecognizer.isRecognitionAvailable(getContext())) {
+            Toast.makeText(getContext(),
+                "⚠️ MOTOR DE VOZ NO DISPONIBLE en esta tablet. Instala la app 'Google' desde Play Store.",
+                Toast.LENGTH_LONG).show();
+        }
+
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getContext());
         speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-MX");
-        speechIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
         speechIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
 
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
-            @Override public void onReadyForSpeech(Bundle params) {}
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                cicloEnCurso = true;
+            }
+
             @Override public void onBeginningOfSpeech() {}
             @Override public void onRmsChanged(float rmsdB) {}
             @Override public void onBufferReceived(byte[] buffer) {}
@@ -54,39 +105,75 @@ public class DictadoNativoPlugin extends Plugin {
 
             @Override
             public void onError(int error) {
+                cicloEnCurso = false;
+
+                // ERROR_CLIENT es normal cuando detenemos manualmente o cuando el motor reinicia
+                // No lo mostramos como error visible al usuario
+                if (error == SpeechRecognizer.ERROR_CLIENT) {
+                    if (escuchandoActivo && !deteniendoManualmente) {
+                        // Reinicio silencioso con espera prudente
+                        programarReinicio(800);
+                    }
+                    return;
+                }
+
+                // ERROR_SPEECH_TIMEOUT y ERROR_NO_MATCH son normales (nadie habló)
+                // Tampoco los mostramos al usuario
+                if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_NO_MATCH) {
+                    if (escuchandoActivo && !deteniendoManualmente) {
+                        programarReinicio(300);
+                    }
+                    return;
+                }
+
+                // Errores graves SÍ los mostramos
+                String descripcion = traducirError(error);
+                Toast.makeText(getContext(), "❌ " + descripcion, Toast.LENGTH_LONG).show();
+
                 JSObject ret = new JSObject();
                 ret.put("code", error);
+                ret.put("mensaje", descripcion);
                 notifyListeners("dictadoError", ret);
 
-                if (escuchandoActivo && error != SpeechRecognizer.ERROR_CLIENT) {
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        if (escuchandoActivo) escucharInterno();
-                    }, 300);
+                // Solo reintentar en errores recuperables
+                boolean debeReintentar = escuchandoActivo
+                    && !deteniendoManualmente
+                    && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS
+                    && error != SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
+                    && error != SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE
+                    && error != SpeechRecognizer.ERROR_NETWORK
+                    && error != SpeechRecognizer.ERROR_SERVER;
+
+                if (debeReintentar) {
+                    programarReinicio(1000);
+                } else {
+                    escuchandoActivo = false;
                 }
             }
 
             @Override
             public void onPartialResults(Bundle partialResults) {
-                emitirResultados(partialResults, "dictadoParcial");
+                // Ignoramos parciales para evitar duplicación
             }
 
             @Override
             public void onResults(Bundle results) {
-                emitirResultados(results, "dictadoFinal");
+                cicloEnCurso = false;
 
-                if (escuchandoActivo) {
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        if (escuchandoActivo) escucharInterno();
-                    }, 200);
-                }
-            }
-
-            private void emitirResultados(Bundle bundle, String evento) {
-                ArrayList<String> matches = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 if (matches != null && !matches.isEmpty()) {
-                    JSObject ret = new JSObject();
-                    ret.put("texto", matches.get(0));
-                    notifyListeners(evento, ret);
+                    String textoFinal = matches.get(0).trim();
+                    if (!textoFinal.isEmpty() && !textoFinal.equalsIgnoreCase(ultimoTextoEmitido)) {
+                        ultimoTextoEmitido = textoFinal;
+                        JSObject ret = new JSObject();
+                        ret.put("texto", textoFinal);
+                        notifyListeners("dictadoFinal", ret);
+                    }
+                }
+
+                // Reinicio controlado con delay prudente
+                if (escuchandoActivo && !deteniendoManualmente) {
+                    programarReinicio(500);
                 }
             }
         });
@@ -98,7 +185,10 @@ public class DictadoNativoPlugin extends Plugin {
             requestPermissionForAlias("microfono", call, "permisoCallback");
             return;
         }
+        ultimoTextoEmitido = "";
+        deteniendoManualmente = false;
         escuchandoActivo = true;
+        cancelarReinicioPendiente();
         escucharInterno();
         call.resolve();
     }
@@ -106,7 +196,10 @@ public class DictadoNativoPlugin extends Plugin {
     @PermissionCallback
     private void permisoCallback(PluginCall call) {
         if (getPermissionState("microfono") == PermissionState.GRANTED) {
+            ultimoTextoEmitido = "";
+            deteniendoManualmente = false;
             escuchandoActivo = true;
+            cancelarReinicioPendiente();
             escucharInterno();
             call.resolve();
         } else {
@@ -117,26 +210,47 @@ public class DictadoNativoPlugin extends Plugin {
     @PluginMethod
     public void detener(PluginCall call) {
         escuchandoActivo = false;
+        deteniendoManualmente = true;
+        cancelarReinicioPendiente();
+
         getActivity().runOnUiThread(() -> {
             if (speechRecognizer != null) {
                 try { speechRecognizer.stopListening(); } catch (Exception ignored) {}
-                try { speechRecognizer.cancel(); } catch (Exception ignored) {}
             }
         });
+
+        // Esperar un poco y luego cancelar para asegurar cierre limpio
+        mainHandler.postDelayed(() -> {
+            getActivity().runOnUiThread(() -> {
+                if (speechRecognizer != null) {
+                    try { speechRecognizer.cancel(); } catch (Exception ignored) {}
+                }
+            });
+            ultimoTextoEmitido = "";
+            deteniendoManualmente = false;
+        }, 150);
+
         call.resolve();
     }
 
     private void escucharInterno() {
         if (getActivity() == null) return;
+        if (!escuchandoActivo || deteniendoManualmente) return;
+        if (cicloEnCurso) return; // Evitar doble arranque
+
         getActivity().runOnUiThread(() -> {
-            if (speechRecognizer != null && escuchandoActivo) {
+            if (speechRecognizer != null && escuchandoActivo && !deteniendoManualmente) {
                 try {
+                    cicloEnCurso = true;
                     speechRecognizer.startListening(speechIntent);
                 } catch (Exception e) {
+                    cicloEnCurso = false;
+                    Toast.makeText(getContext(), "❌ Error inicio: " + e.getMessage(), Toast.LENGTH_LONG).show();
                     JSObject ret = new JSObject();
                     ret.put("code", -1);
                     ret.put("mensaje", e.getMessage());
                     notifyListeners("dictadoError", ret);
+                    escuchandoActivo = false;
                 }
             }
         });
@@ -145,6 +259,8 @@ public class DictadoNativoPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         escuchandoActivo = false;
+        deteniendoManualmente = true;
+        cancelarReinicioPendiente();
         if (speechRecognizer != null) {
             try { speechRecognizer.destroy(); } catch (Exception ignored) {}
             speechRecognizer = null;
