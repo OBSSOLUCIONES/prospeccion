@@ -41,6 +41,48 @@ const obtenerClienteSupabaseUnico = () => {
 
 export const supabase = obtenerClienteSupabaseUnico();
 
+// =========================================================================
+// UTILIDAD: EXTRAER RUTA INTERNA DEL BUCKET DESDE UNA URL PÚBLICA
+// =========================================================================
+function extraerRutaStorage(url, bucket = 'evidencias-obras') {
+  if (!url || typeof url !== 'string') return null;
+  // Si es base64 o no pertenece a Supabase Storage, no se procesa
+  if (url.startsWith('data:image/') || !url.includes('/storage/v1/object/public/')) {
+    if (url.startsWith('fotos/') || url.startsWith('documentos/')) return url;
+    return null;
+  }
+
+  const partes = url.split(`${bucket}/`);
+  if (partes.length > 1) {
+    return decodeURIComponent(partes[1]);
+  }
+  return null;
+}
+
+// Borrar lista de archivos del bucket evidencias-obras
+async function eliminarArchivosFisicosStorage(listaUrls = []) {
+  if (!supabase || !listaUrls.length) return;
+  const rutas = listaUrls
+    .map(url => extraerRutaStorage(url))
+    .filter(Boolean);
+
+  if (!rutas.length) return;
+
+  try {
+    const { error } = await supabase.storage
+      .from('evidencias-obras')
+      .remove(rutas);
+
+    if (error) {
+      console.warn('Aviso borrando archivos físicos de Storage:', error.message);
+    } else {
+      console.log(`✅ ${rutas.length} archivo(s) eliminados físicamente del Storage:`, rutas);
+    }
+  } catch (err) {
+    console.warn('Fallo al conectar con Storage para eliminar archivos:', err);
+  }
+}
+
 // ==========================================
 // MOTOR INDEXEDDB PARA MODO OFFLINE EN CAMPO
 // ==========================================
@@ -226,9 +268,9 @@ export async function subirArchivoSupabase(file, folder = 'fotos') {
   }
 }
 
-// =========================================================================
+// ==========================================
 // AUTO-ADAPTADOR INTELIGENTE RESILIENTE
-// =========================================================================
+// ==========================================
 async function ejecutarUpsertSeguro(tabla, filaOriginal) {
   if (!supabase) return { ok: false, error: 'No supabase' };
   let fila = { ...filaOriginal };
@@ -241,7 +283,6 @@ async function ejecutarUpsertSeguro(tabla, filaOriginal) {
       return { ok: true };
     }
 
-    // 1. Quitar columna si no existe en Supabase
     const matchColumnaInexistente = error.message.match(/could not find the '([^']+)' column/i) 
       || error.message.match(/column "([^"]+)" of relation "[^"]+" does not exist/i);
     
@@ -251,7 +292,6 @@ async function ejecutarUpsertSeguro(tabla, filaOriginal) {
       continue;
     }
 
-    // 2. Rellenar columna si es obligatoria NOT NULL
     const matchColumnaNotNull = error.message.match(/null value in column "([^"]+)"/i);
     if (matchColumnaNotNull) {
       const colFaltante = matchColumnaNotNull[1];
@@ -259,7 +299,6 @@ async function ejecutarUpsertSeguro(tabla, filaOriginal) {
       continue;
     }
 
-    // 3. Desvincular cliente_id si falla llave foránea
     if (error.message.includes('cliente_id') || error.code === '23503') {
       fila.cliente_id = null;
       continue;
@@ -346,7 +385,7 @@ export async function eliminarClienteDB(id) {
 }
 
 // ==========================================
-// CRUD OBRAS
+// CRUD OBRAS (CON ELIMINACIÓN DE FOTOS Y ARCHIVOS DEL STORAGE)
 // ==========================================
 export async function obtenerObrasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -402,19 +441,63 @@ export async function guardarObraDB(obra) {
   }
 }
 
-export async function eliminarObraDB(id) {
+// BORRADO MAESTRO DE OBRA: Elimina imágenes de visitas, documentos de ventas y registros
+export async function eliminarObraDB(id, contextoLocal = {}) {
   const idLimpio = String(id).trim().toUpperCase();
+
   if (!supabase || !navigator.onLine) {
     await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
     return;
   }
+
   try {
+    let urlsAEliminar = [];
+
+    // 1. Recolectar URLs desde el contexto local si existen
+    if (Array.isArray(contextoLocal.visitas)) {
+      contextoLocal.visitas.forEach(v => {
+        if (Array.isArray(v.fotos)) urlsAEliminar.push(...v.fotos);
+      });
+    }
+    if (Array.isArray(contextoLocal.movimientos)) {
+      contextoLocal.movimientos.forEach(m => {
+        if (m.documentoAdjunto?.url) urlsAEliminar.push(m.documentoAdjunto.url);
+      });
+    }
+
+    // 2. Consultar en Supabase para asegurar cualquier archivo no cargado localmente
+    const [{ data: visitasDB }, { data: movsDB }] = await Promise.all([
+      supabase.from('visitas').select('fotos').eq('obra_id', idLimpio),
+      supabase.from('movimientos_comerciales').select('documento_adjunto').eq('obra_id', idLimpio)
+    ]);
+
+    if (Array.isArray(visitasDB)) {
+      visitasDB.forEach(v => {
+        if (Array.isArray(v.fotos)) urlsAEliminar.push(...v.fotos);
+      });
+    }
+
+    if (Array.isArray(movsDB)) {
+      movsDB.forEach(m => {
+        if (m.documento_adjunto?.url) urlsAEliminar.push(m.documento_adjunto.url);
+      });
+    }
+
+    // 3. ELIMINAR FOTOS Y DOCUMENTOS FÍSICOS DEL STORAGE DE SUPABASE
+    if (urlsAEliminar.length > 0) {
+      await eliminarArchivosFisicosStorage(urlsAEliminar);
+    }
+
+    // 4. ELIMINAR REGISTROS DE BASE DE DATOS EN CASCADA
     await supabase.from('movimientos_comerciales').delete().eq('obra_id', idLimpio);
     await supabase.from('visitas').delete().eq('obra_id', idLimpio);
     const { error } = await supabase.from('obras').delete().eq('id', idLimpio);
+
     if (error) {
       alert(`⚠️ Error eliminando obra en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
+    } else {
+      console.log('✅ Obra, visitas, documentos y fotos eliminados por completo de Supabase:', idLimpio);
     }
   } catch (err) {
     await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
@@ -422,7 +505,7 @@ export async function eliminarObraDB(id) {
 }
 
 // ==========================================
-// CRUD VISITAS
+// CRUD VISITAS (CON ELIMINACIÓN DE FOTOS FÍSICAS)
 // ==========================================
 export async function obtenerVisitasDB() {
   if (!supabase || !navigator.onLine) return null;
@@ -481,19 +564,31 @@ export async function guardarVisitaDB(visita) {
   }
 }
 
-export async function eliminarVisitaDB(id) {
+// Borrar visita individual y sus fotos de Storage
+export async function eliminarVisitaDB(id, fotosLocales = []) {
   const idLimpio = String(id).trim().toUpperCase();
   if (!supabase || !navigator.onLine) {
     await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
     return;
   }
   try {
+    // 1. Borrar fotos de Storage
+    let fotosABorrar = Array.isArray(fotosLocales) ? [...fotosLocales] : [];
+    const { data: visitaDB } = await supabase.from('visitas').select('fotos').eq('id', idLimpio).maybeSingle();
+    if (visitaDB && Array.isArray(visitaDB.fotos)) {
+      fotosABorrar.push(...visitaDB.fotos);
+    }
+    if (fotosABorrar.length > 0) {
+      await eliminarArchivosFisicosStorage(fotosABorrar);
+    }
+
+    // 2. Borrar registro
     const { error } = await supabase.from('visitas').delete().eq('id', idLimpio);
     if (error) {
       alert(`⚠️ Error eliminando visita en Supabase: ${error.message}`);
       await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
     } else {
-      console.log('✅ Visita eliminada de Supabase:', idLimpio);
+      console.log('✅ Visita y sus fotos eliminadas de Supabase:', idLimpio);
     }
   } catch (err) {
     await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
@@ -584,10 +679,7 @@ export async function obtenerPosicionesEnVivoDB() {
   if (!supabase || !navigator.onLine) return [];
   try {
     const { data, error } = await supabase.from('posiciones_en_vivo').select('*');
-    if (error) {
-      console.error('Error leyendo flota en vivo:', error);
-      return [];
-    }
+    if (error) return [];
     return data || [];
   } catch {
     return [];
@@ -626,13 +718,9 @@ export async function sincronizarColaOffline() {
           sincronizados++;
         }
       } else if (item.tabla === 'obras_delete') {
-        await supabase.from('movimientos_comerciales').delete().eq('obra_id', item.datos.id);
-        await supabase.from('visitas').delete().eq('obra_id', item.datos.id);
-        const { error } = await supabase.from('obras').delete().eq('id', item.datos.id);
-        if (!error) {
-          await eliminarItemColaOffline(item.id);
-          sincronizados++;
-        }
+        await eliminarObraDB(item.datos.id);
+        await eliminarItemColaOffline(item.id);
+        sincronizados++;
       } else if (item.tabla === 'clientes') {
         const res = await ejecutarUpsertSeguro('clientes', item.datos);
         if (res.ok) {
@@ -670,11 +758,9 @@ export async function sincronizarColaOffline() {
           sincronizados++;
         }
       } else if (item.tabla === 'visitas_delete') {
-        const { error } = await supabase.from('visitas').delete().eq('id', item.datos.id);
-        if (!error) {
-          await eliminarItemColaOffline(item.id);
-          sincronizados++;
-        }
+        await eliminarVisitaDB(item.datos.id);
+        await eliminarItemColaOffline(item.id);
+        sincronizados++;
       } else if (item.tabla === 'movimientos') {
         const res = await ejecutarUpsertSeguro('movimientos_comerciales', item.datos);
         if (res.ok) {

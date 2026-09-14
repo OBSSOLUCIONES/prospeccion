@@ -244,16 +244,14 @@ export default function App() {
       if (Array.isArray(visitasDB)) setVisitas(visitasDB);
       if (Array.isArray(movimientosDB)) setMovimientos(movimientosDB);
 
-      if (esDirector) {
-        const flota = await obtenerPosicionesEnVivoDB();
-        setAsesoresEnVivo(flota);
-      }
+      const flota = await obtenerPosicionesEnVivoDB();
+      setAsesoresEnVivo(flota);
     } catch (err) {
       console.warn('Error sincronizando con nube:', err);
     } finally {
       setSincronizando(false);
     }
-  }, [esDirector]);
+  }, []);
 
   useEffect(() => {
     recargarDatosNube();
@@ -263,17 +261,16 @@ export default function App() {
         recargarDatosNube();
       });
 
-      let desuscribirFlota = () => {};
-      if (esDirector) {
-        desuscribirFlota = suscribirPosicionesEnVivo((flota) => setAsesoresEnVivo(flota));
-      }
+      const desuscribirFlota = suscribirPosicionesEnVivo((flota) => {
+        setAsesoresEnVivo(flota);
+      });
 
       return () => {
         desuscribirCambios();
         desuscribirFlota();
       };
     }
-  }, [recargarDatosNube, esDirector]);
+  }, [recargarDatosNube]);
 
   useEffect(() => { localStorage.setItem('app_obras_maestras', JSON.stringify(obras)); }, [obras]);
   useEffect(() => { localStorage.setItem('app_obras_bitacora_visitas', JSON.stringify(visitas)); }, [visitas]);
@@ -307,7 +304,7 @@ export default function App() {
         setGpsEstado(precision <= 25 ? 'activo' : 'calibrando');
 
         const ahora = Date.now();
-        if (usuarioActivo && ahora - ultimaTransmisionRef.current > 25000) {
+        if (usuarioActivo && ahora - ultimaTransmisionRef.current > 15000) {
           ultimaTransmisionRef.current = ahora;
           transmitirPosicionDB({
             usuarioId: usuarioActivo.id,
@@ -351,16 +348,22 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // ELIMINACIÓN DESTRUCTIVA TOTAL (LIMPIA BASE DE DATOS Y STORAGE)
   const ejecutarEliminacion = async () => {
     if (!itemAEliminar) return;
 
     if (itemAEliminar.tipo === 'obra') {
       const id = itemAEliminar.data.id;
+      // Guardar contexto local de fotos y documentos para asegurar su borrado
+      const visitasObra = visitas.filter(v => v.obraId === id);
+      const movsObra = movimientos.filter(m => m.obraId === id);
+
       setObras(prev => prev.filter(o => o.id !== id));
       setVisitas(prev => prev.filter(v => v.obraId !== id));
       setMovimientos(prev => prev.filter(m => m.obraId !== id));
       if (obraSeleccionada && obraSeleccionada.id === id) setObraSeleccionada(null);
-      await eliminarObraDB(id);
+
+      await eliminarObraDB(id, { visitas: visitasObra, movimientos: movsObra });
     } else if (itemAEliminar.tipo === 'cliente') {
       const id = itemAEliminar.data.id;
       setClientes(prev => prev.filter(c => c.id !== id));
@@ -396,14 +399,15 @@ export default function App() {
     refrescarConteoOffline();
   };
 
+  // Borrado de visita individual y sus fotos
   const handleEliminarVisita = async (visitaId) => {
     const idLimpio = String(visitaId).trim().toUpperCase();
+    const visitaABorrar = visitas.find(v => v.id === idLimpio);
     setVisitas(prev => prev.filter(v => v.id !== idLimpio));
-    await eliminarVisitaDB(idLimpio);
+    await eliminarVisitaDB(idLimpio, visitaABorrar?.fotos || []);
     refrescarConteoOffline();
   };
 
-  // GUARDAR VENTA O COTIZACIÓN (CON CIERRE AUTOMÁTICO DE COTIZACIÓN PREVIA)
   const handleGuardarMovimiento = async (nuevoMov) => {
     const movLimpio = sanitizarAMayusculas(nuevoMov);
 
@@ -413,12 +417,11 @@ export default function App() {
         listaActualizada = [movLimpio, ...listaActualizada];
       }
 
-      // Si es venta enlazada a una cotización, la marcamos como GANADA automáticamente
       if (movLimpio.tipo === 'VENTA' && movLimpio.cotizacionOrigenId) {
         listaActualizada = listaActualizada.map(m => {
           if (m.id === movLimpio.cotizacionOrigenId) {
             const cotGanada = { ...m, estatus: 'GANADA' };
-            guardarMovimientoDB(cotGanada); // Actualiza también en Supabase
+            guardarMovimientoDB(cotGanada);
             return cotGanada;
           }
           return m;
@@ -726,6 +729,7 @@ export default function App() {
             filtroSucursal={filtroSucursal}
             setFiltroSucursal={setFiltroSucursal}
             asesoresEnVivo={asesoresEnVivo}
+            usuarioActivo={usuarioActivo}
           />
         )}
       </main>
@@ -820,7 +824,6 @@ export default function App() {
         visitaAEditar={visitaAEditar}
       />
 
-      {/* MODAL COMERCIAL CONECTADO CON MOVIMIENTOS PREVIOS */}
       <ModalComercial
         isOpen={modalComercialAbierto}
         onClose={() => { setModalComercialAbierto(false); setConfigComercial(null); }}
@@ -872,7 +875,7 @@ export default function App() {
                 </strong>
                 {itemAEliminar.tipo === 'obra' && (
                   <span className="block text-[11px] text-rose-600 font-bold mt-1">
-                    ⚠️ Se eliminarán de Supabase sus visitas y ventas ligadas automáticamente.
+                    ⚠️ Se eliminarán de Supabase sus visitas, ventas, fotos y documentos físicos automáticamente.
                   </span>
                 )}
               </p>
