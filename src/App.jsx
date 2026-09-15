@@ -35,6 +35,8 @@ import PullToRefreshIndicator from './components/PullToRefreshIndicator';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
 import RutaDelDia from './components/RutaDelDia';
 import ModalBusquedaGlobal from './components/ModalBusquedaGlobal';
+import ModalChat from './components/ModalChat';
+import { suscribirMensajesEnVivo, obtenerTodosLosMensajesDB } from './lib/chat';
 import { inicializarNotificaciones, programarRecordatorioObrasFrias, cancelarRecordatorios } from './lib/notificaciones';
 
 import { 
@@ -204,8 +206,11 @@ export default function App() {
   const [destinoRuta, setDestinoRuta] = useState(null);
   const [modalRutaDia, setModalRutaDia] = useState(false);
   const [modalBusquedaGlobal, setModalBusquedaGlobal] = useState(false);
+  const [modalChat, setModalChat] = useState(false);
+  const [mensajesSinLeer, setMensajesSinLeer] = useState(0);
 
   const esDirector = usuarioActivo?.rol === 'admin' || usuarioActivo?.sucursal === 'TODAS';
+
   // Haptic feedback global: vibración suave en cualquier toque de botón
   useEffect(() => {
     const handleClick = (e) => {
@@ -217,8 +222,7 @@ export default function App() {
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-
-    const algunModalAbierto = Boolean(
+  const algunModalAbierto = Boolean(
     obraSeleccionada || 
     modalObraAbierto || 
     modalVisitaAbierto || 
@@ -230,7 +234,8 @@ export default function App() {
     destinoRuta ||
     itemAEliminar ||
     modalRutaDia ||
-    modalBusquedaGlobal
+    modalBusquedaGlobal ||
+    modalChat
   );
 
   // Botón de retroceso de Android
@@ -243,6 +248,7 @@ export default function App() {
           if (modalConfirmarSalida) { setModalConfirmarSalida(false); return; }
           if (visorModal) { setVisorModal(null); return; }
           if (modalBusquedaGlobal) { setModalBusquedaGlobal(false); return; }
+          if (modalChat) { setModalChat(false); return; }
           if (modalRutaDia) { setModalRutaDia(false); return; }
           if (destinoRuta) { setDestinoRuta(null); return; }
           if (mapaPickerConfig) { setMapaPickerConfig(null); return; }
@@ -268,11 +274,11 @@ export default function App() {
         listener.remove();
       }
     };
-    }, [
+  }, [
     modalConfirmarSalida, visorModal, destinoRuta, mapaPickerConfig,
     itemAEliminar, modalVisitaAbierto, modalComercialAbierto,
     modalObraAbierto, modalCliente, modalKpisAbierto, obraSeleccionada,
-    modalRutaDia, modalBusquedaGlobal
+    modalRutaDia, modalBusquedaGlobal, modalChat
   ]);
 
   const handleCerrarAppDefinitivo = () => {
@@ -397,7 +403,6 @@ export default function App() {
   // Pull-to-refresh: arrastra hacia abajo para recargar datos
   const { pulling, distance } = usePullToRefresh(recargarDatosNube, { threshold: 80 });
 
-
   useEffect(() => {
     recargarDatosNube();
 
@@ -422,7 +427,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
   useEffect(() => { localStorage.setItem('app_obras_clientes', JSON.stringify(clientes)); }, [clientes]);
 
-    useEffect(() => {
+  useEffect(() => {
     if (usuarioActivo) {
       localStorage.setItem('app_obras_usuario_activo', JSON.stringify(usuarioActivo));
       setFiltroSucursal(usuarioActivo.sucursal === 'TODAS' ? 'TODAS' : usuarioActivo.sucursal);
@@ -820,6 +825,29 @@ export default function App() {
     return diff > 12;
   }).length;
 
+  // Contar mensajes sin leer
+  const refrescarMensajesSinLeer = useCallback(async () => {
+    if (!usuarioActivo) return;
+    const msgs = await obtenerTodosLosMensajesDB(usuarioActivo.id);
+    const sinLeer = msgs.filter(m => m.receptor_id === usuarioActivo.id && !m.leido).length;
+    setMensajesSinLeer(sinLeer);
+  }, [usuarioActivo]);
+
+  useEffect(() => {
+    if (!usuarioActivo) {
+      setMensajesSinLeer(0);
+      return;
+    }
+
+    refrescarMensajesSinLeer();
+
+    const desuscribir = suscribirMensajesEnVivo(usuarioActivo.id, () => {
+      refrescarMensajesSinLeer();
+    });
+
+    return () => desuscribir();
+  }, [usuarioActivo, refrescarMensajesSinLeer]);
+
   // Programar recordatorio de obras frías (solo en APK)
   useEffect(() => {
     if (!usuarioActivo) return;
@@ -874,13 +902,13 @@ export default function App() {
       <PullToRefreshIndicator pulling={pulling} distance={distance} threshold={80} />
 
       {/* HEADER */}
-            <Header 
+      <Header 
         gpsEstado={gpsEstado} 
         tabletPos={tabletPos} 
         onExportarExcel={exportarAExcel}
         sincronizando={sincronizando}
         usuarioActivo={usuarioActivo}
-                onLogout={async () => {
+        onLogout={async () => {
           if (usuarioActivo) {
             await eliminarMiPosicionDB(usuarioActivo.id);
           }
@@ -890,6 +918,11 @@ export default function App() {
         onAbrirKpis={() => setModalKpisAbierto(true)}
         onAbrirBusqueda={() => setModalBusquedaGlobal(true)}
         onAbrirRutaDia={() => setModalRutaDia(true)}
+        onAbrirChat={() => {
+          setModalChat(true);
+          setTimeout(() => refrescarMensajesSinLeer(), 500);
+        }}
+        mensajesSinLeer={mensajesSinLeer}
         filtroSucursal={filtroSucursal}
         setFiltroSucursal={setFiltroSucursal}
         estaOnline={estaOnline}
@@ -1122,7 +1155,6 @@ export default function App() {
         onClose={() => setVisorModal(null)}
       />
 
-
       <RutaDelDia
         isOpen={modalRutaDia}
         onClose={() => setModalRutaDia(false)}
@@ -1139,6 +1171,16 @@ export default function App() {
           setModalVisitaAbierto(true);
         }}
         onAbrirRuta={setDestinoRuta}
+      />
+
+      <ModalChat
+        isOpen={modalChat}
+        onClose={() => {
+          setModalChat(false);
+          refrescarMensajesSinLeer();
+        }}
+        usuarioActivo={usuarioActivo}
+        usuarios={usuarios}
       />
 
       <ModalBusquedaGlobal

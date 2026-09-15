@@ -1,6 +1,6 @@
 // src/components/Header.jsx
 import React from 'react';
-import { FileSpreadsheet, Lock, Target, Wifi, WifiOff, CloudUpload, Search, Route } from 'lucide-react';
+import { FileSpreadsheet, Lock, Target, Wifi, WifiOff, CloudUpload, Search, Route, MessageCircle } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
 export default function Header({ 
@@ -12,6 +12,8 @@ export default function Header({
   onAbrirKpis,
   onAbrirBusqueda,
   onAbrirRutaDia,
+  onAbrirChat,
+  mensajesSinLeer = 0,
   filtroSucursal,
   setFiltroSucursal,
   estaOnline = true,
@@ -78,6 +80,19 @@ export default function Header({
           <Search className="w-4 h-4 stroke-[2.5]" />
         </button>
 
+        {/* Chat interno */}
+        <button
+          type="button"
+          onClick={onAbrirChat}
+          className="relative w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-[#001757] shadow-2xs active:scale-90 transition-all"
+          title="Chat interno">
+          <MessageCircle className="w-4 h-4 stroke-[2.5]" />
+          {mensajesSinLeer > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center px-1 shadow-sm">
+              {mensajesSinLeer > 9 ? '9+' : mensajesSinLeer}
+            </span>
+          )}
+        </button>
         {/* Ruta del día (no para director) */}
         {!esDirector && (
           <button
