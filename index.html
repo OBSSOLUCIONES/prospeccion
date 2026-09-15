@@ -25,16 +25,55 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
 
-    <!-- REGISTRO NATIVO DEL SERVICE WORKER PARA CARGA EN FRÍO SIN INTERNET -->
+        <!-- REGISTRO INTELIGENTE DEL SERVICE WORKER (solo en web, no en APK) -->
+        <!-- REGISTRO INTELIGENTE DEL SERVICE WORKER + LIMPIEZA FORZADA DE CACHÉ -->
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').then((reg) => {
-            console.log('✅ Service Worker OBS activado con éxito:', reg.scope);
-          }).catch((err) => {
-            console.warn('Fallo registrando Service Worker:', err);
+      const esAppNativa = !!(
+        (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
+        navigator.userAgent.includes('Capacitor') ||
+        /; wv\)/.test(navigator.userAgent)
+      );
+
+      // Marca de versión para saber qué build está corriendo
+      const OBS_VERSION = 'v5-2026-09-15';
+      console.log('🚀 OBS build:', OBS_VERSION);
+
+      if (esAppNativa) {
+        // MODO APK: limpiar TODO caché heredado y desregistrar Service Workers viejos
+        (async () => {
+          try {
+            if ('serviceWorker' in navigator) {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(r => r.unregister()));
+            }
+            if ('caches' in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.map(k => caches.delete(k)));
+            }
+
+            // Detectar cambio de versión: si el localStorage tiene otra versión,
+            // limpiar todo para evitar código viejo persistente.
+            const versionGuardada = localStorage.getItem('obs_app_version');
+            if (versionGuardada !== OBS_VERSION) {
+              console.log('🔄 Cambio de versión detectado:', versionGuardada, '→', OBS_VERSION);
+              localStorage.setItem('obs_app_version', OBS_VERSION);
+              // NO borramos el usuario activo ni los datos, solo avisamos
+            }
+          } catch (err) {
+            console.warn('Error en limpieza de caché nativo:', err);
+          }
+        })();
+      } else {
+        // MODO WEB: registrar Service Worker normal para offline
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').then((reg) => {
+              console.log('✅ Service Worker OBS activado con éxito:', reg.scope);
+            }).catch((err) => {
+              console.warn('Fallo registrando Service Worker:', err);
+            });
           });
-        });
+        }
       }
     </script>
   </body>

@@ -6,6 +6,7 @@ import {
   ChevronRight, Link2, Receipt, FileCheck, CheckCircle2, Eye
 } from 'lucide-react';
 import { FASE_COLORS, CAT_FORMA_PAGO } from '../data/constants';
+import { abrirGoogleCalendar } from '../lib/calendario';
 
 const formatearMoneda = (val) => {
   return new Intl.NumberFormat('es-MX', {
@@ -463,6 +464,25 @@ export default function ModalExpedienteObra({
                   className="w-full min-h-[48px] bg-[#001757] text-white font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-98 shadow-sm">
                   <Navigation className="w-4 h-4 text-[#0091FB]" />
                   <span>Iniciar Ruta GPS (Waze / Google Maps)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const manana = new Date();
+                    manana.setDate(manana.getDate() + 1);
+                    manana.setHours(9, 0, 0, 0);
+                    abrirGoogleCalendar({
+                      titulo: `Visita a obra: ${obra.nombre}`,
+                      descripcion: `Supervisión técnica - ${obra.sucursal}\nFase actual: ${obra.estatusFase}`,
+                      ubicacion: obra.direccion || `${obra.lat}, ${obra.lng}`,
+                      fechaInicio: manana,
+                      duracionHoras: 1
+                    });
+                  }}
+                  className="w-full min-h-[48px] bg-white border-2 border-[#001757] text-[#001757] font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-98 shadow-sm mt-2">
+                  <Calendar className="w-4 h-4 text-[#0091FB]" />
+                  <span>📅 Agendar visita en Google Calendar</span>
                 </button>
               </div>
             </div>

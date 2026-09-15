@@ -31,6 +31,11 @@ import ModalVisor from './components/ModalVisor';
 import ModalNavegacion from './components/ModalNavegacion';
 import PantallaPin from './components/PantallaPin';
 import SplashScreen from './components/SplashScreen';
+import PullToRefreshIndicator from './components/PullToRefreshIndicator';
+import { usePullToRefresh } from './hooks/usePullToRefresh';
+import RutaDelDia from './components/RutaDelDia';
+import ModalBusquedaGlobal from './components/ModalBusquedaGlobal';
+import { inicializarNotificaciones, programarRecordatorioObrasFrias, cancelarRecordatorios } from './lib/notificaciones';
 
 import { 
   isSupabaseConfigured,
@@ -51,6 +56,8 @@ import {
   suscribirCambiosGlobales,
   sincronizarColaOffline,
   contarItemsColaOffline,
+  limpiarPosicionesFantasmaDB,
+  eliminarMiPosicionDB,
   notificarToast
 } from './lib/supabase';
 
@@ -195,10 +202,23 @@ export default function App() {
   const [visorModal, setVisorModal] = useState(null);
   const [mapaPickerConfig, setMapaPickerConfig] = useState(null);
   const [destinoRuta, setDestinoRuta] = useState(null);
+  const [modalRutaDia, setModalRutaDia] = useState(false);
+  const [modalBusquedaGlobal, setModalBusquedaGlobal] = useState(false);
 
   const esDirector = usuarioActivo?.rol === 'admin' || usuarioActivo?.sucursal === 'TODAS';
+  // Haptic feedback global: vibración suave en cualquier toque de botón
+  useEffect(() => {
+    const handleClick = (e) => {
+      const target = e.target.closest('button, [role="button"]');
+      if (!target || target.disabled) return;
+      if (navigator.vibrate) navigator.vibrate(8);
+    };
+    document.addEventListener('click', handleClick, { passive: true });
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 
-  const algunModalAbierto = Boolean(
+
+    const algunModalAbierto = Boolean(
     obraSeleccionada || 
     modalObraAbierto || 
     modalVisitaAbierto || 
@@ -208,7 +228,9 @@ export default function App() {
     mapaPickerConfig || 
     visorModal || 
     destinoRuta ||
-    itemAEliminar
+    itemAEliminar ||
+    modalRutaDia ||
+    modalBusquedaGlobal
   );
 
   // Botón de retroceso de Android
@@ -220,6 +242,8 @@ export default function App() {
         listener = await CapApp.addListener('backButton', () => {
           if (modalConfirmarSalida) { setModalConfirmarSalida(false); return; }
           if (visorModal) { setVisorModal(null); return; }
+          if (modalBusquedaGlobal) { setModalBusquedaGlobal(false); return; }
+          if (modalRutaDia) { setModalRutaDia(false); return; }
           if (destinoRuta) { setDestinoRuta(null); return; }
           if (mapaPickerConfig) { setMapaPickerConfig(null); return; }
           if (itemAEliminar) { setItemAEliminar(null); return; }
@@ -244,10 +268,11 @@ export default function App() {
         listener.remove();
       }
     };
-  }, [
+    }, [
     modalConfirmarSalida, visorModal, destinoRuta, mapaPickerConfig,
     itemAEliminar, modalVisitaAbierto, modalComercialAbierto,
-    modalObraAbierto, modalCliente, modalKpisAbierto, obraSeleccionada
+    modalObraAbierto, modalCliente, modalKpisAbierto, obraSeleccionada,
+    modalRutaDia, modalBusquedaGlobal
   ]);
 
   const handleCerrarAppDefinitivo = () => {
@@ -369,6 +394,10 @@ export default function App() {
     }
   }, []);
 
+  // Pull-to-refresh: arrastra hacia abajo para recargar datos
+  const { pulling, distance } = usePullToRefresh(recargarDatosNube, { threshold: 80 });
+
+
   useEffect(() => {
     recargarDatosNube();
 
@@ -393,12 +422,22 @@ export default function App() {
   useEffect(() => { localStorage.setItem('app_obras_movimientos_comerciales', JSON.stringify(movimientos)); }, [movimientos]);
   useEffect(() => { localStorage.setItem('app_obras_clientes', JSON.stringify(clientes)); }, [clientes]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (usuarioActivo) {
       localStorage.setItem('app_obras_usuario_activo', JSON.stringify(usuarioActivo));
       setFiltroSucursal(usuarioActivo.sucursal === 'TODAS' ? 'TODAS' : usuarioActivo.sucursal);
+
+      // Limpiar posiciones fantasma: si esta tablet fue usada por otro usuario
+      // antes, borrar su rastro del mapa en vivo para que el Director no vea zombies.
+      limpiarPosicionesFantasmaDB(deviceIdRef.current, usuarioActivo.id);
+
+      // Inicializar notificaciones nativas (solo Android/APK)
+      inicializarNotificaciones().then((ok) => {
+        if (ok) console.log('🔔 Notificaciones inicializadas');
+      });
     } else {
       localStorage.removeItem('app_obras_usuario_activo');
+      cancelarRecordatorios();
     }
   }, [usuarioActivo]);
 
@@ -433,13 +472,17 @@ export default function App() {
           });
         }
       },
-            (error) => {
+      (error) => {
+        // Distinguir entre negación real de permiso y simple demora del GPS
         console.warn('GPS callback error:', error.code, error.message);
         if (error.code === 1) {
+          // PERMISSION_DENIED: el usuario dijo "no" o lo revocó
           setGpsEstado('bloqueado');
         } else if (error.code === 2) {
+          // POSITION_UNAVAILABLE: sin señal de satélites todavía (interiores, sótano)
           setGpsEstado('buscando');
         } else if (error.code === 3) {
+          // TIMEOUT: tardó más de lo esperado pero el permiso está bien
           setGpsEstado('calibrando');
         } else {
           setGpsEstado('buscando');
@@ -777,6 +820,21 @@ export default function App() {
     return diff > 12;
   }).length;
 
+  // Programar recordatorio de obras frías (solo en APK)
+  useEffect(() => {
+    if (!usuarioActivo) return;
+    const obrasFriasLista = obras.filter(o => {
+      if (o.estadoObra === 'TERMINADA') return false;
+      const vList = visitas
+        .filter(v => v.obraId === o.id)
+        .sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')));
+      if (!vList.length) return true;
+      const diff = Math.floor((Date.now() - new Date(vList[0].fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24));
+      return diff > 12;
+    });
+    programarRecordatorioObrasFrias(obrasFriasLista);
+  }, [usuarioActivo, obras, visitas]);
+
   if (mostrarSplash) {
     return <SplashScreen onFinish={() => setMostrarSplash(false)} />;
   }
@@ -812,15 +870,26 @@ export default function App() {
         ))}
       </div>
 
+      {/* INDICADOR DE PULL-TO-REFRESH */}
+      <PullToRefreshIndicator pulling={pulling} distance={distance} threshold={80} />
+
       {/* HEADER */}
-      <Header 
+            <Header 
         gpsEstado={gpsEstado} 
         tabletPos={tabletPos} 
         onExportarExcel={exportarAExcel}
         sincronizando={sincronizando}
         usuarioActivo={usuarioActivo}
-        onLogout={() => setUsuarioActivo(null)}
+                onLogout={async () => {
+          if (usuarioActivo) {
+            await eliminarMiPosicionDB(usuarioActivo.id);
+          }
+          await cancelarRecordatorios();
+          setUsuarioActivo(null);
+        }}
         onAbrirKpis={() => setModalKpisAbierto(true)}
+        onAbrirBusqueda={() => setModalBusquedaGlobal(true)}
+        onAbrirRutaDia={() => setModalRutaDia(true)}
         filtroSucursal={filtroSucursal}
         setFiltroSucursal={setFiltroSucursal}
         estaOnline={estaOnline}
@@ -1051,6 +1120,39 @@ export default function App() {
       <ModalVisor 
         visorModal={visorModal}
         onClose={() => setVisorModal(null)}
+      />
+
+
+      <RutaDelDia
+        isOpen={modalRutaDia}
+        onClose={() => setModalRutaDia(false)}
+        obras={obras}
+        visitas={visitas}
+        clientes={clientes}
+        tabletPos={tabletPos}
+        usuarioActivo={usuarioActivo}
+        filtroSucursal={filtroSucursal}
+        onSeleccionarObra={(o) => setObraSeleccionada(o)}
+        onNuevaVisita={(obra) => {
+          setVisitaAEditar(null);
+          setObraParaVisita(obra);
+          setModalVisitaAbierto(true);
+        }}
+        onAbrirRuta={setDestinoRuta}
+      />
+
+      <ModalBusquedaGlobal
+        isOpen={modalBusquedaGlobal}
+        onClose={() => setModalBusquedaGlobal(false)}
+        obras={obras}
+        clientes={clientes}
+        movimientos={movimientos}
+        onSeleccionarObra={(o) => setObraSeleccionada(o)}
+        onSeleccionarCliente={(c) => {
+          setTab('clientes');
+          setClienteAEditar(c);
+          setModalCliente(true);
+        }}
       />
 
       {itemAEliminar && (

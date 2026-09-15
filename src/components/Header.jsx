@@ -1,6 +1,6 @@
 // src/components/Header.jsx
 import React from 'react';
-import { FileSpreadsheet, Lock, Target, Wifi, WifiOff, CloudUpload } from 'lucide-react';
+import { FileSpreadsheet, Lock, Target, Wifi, WifiOff, CloudUpload, Search, Route } from 'lucide-react';
 import { SUCURSALES } from '../data/constants';
 
 export default function Header({ 
@@ -10,6 +10,8 @@ export default function Header({
   usuarioActivo, 
   onLogout,
   onAbrirKpis,
+  onAbrirBusqueda,
+  onAbrirRutaDia,
   filtroSucursal,
   setFiltroSucursal,
   estaOnline = true,
@@ -64,9 +66,29 @@ export default function Header({
         </div>
       </div>
 
-      {/* Controles Elásticos (Se adaptan desde 360px hasta pantallas gigantes) */}
+      {/* Controles Elásticos */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
         
+        {/* Búsqueda global */}
+        <button
+          type="button"
+          onClick={onAbrirBusqueda}
+          className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-[#001757] shadow-2xs active:scale-90 transition-all"
+          title="Búsqueda universal (obras, clientes, folios)">
+          <Search className="w-4 h-4 stroke-[2.5]" />
+        </button>
+
+        {/* Ruta del día (no para director) */}
+        {!esDirector && (
+          <button
+            type="button"
+            onClick={onAbrirRutaDia}
+            className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#001757] to-[#00227a] hover:brightness-110 flex items-center justify-center text-white shadow-sm active:scale-90 transition-all"
+            title="Ruta del Día">
+            <Route className="w-4 h-4 stroke-[2.5]" />
+          </button>
+        )}
+
         {/* Telemetría Offline / Online */}
         {pendientesOffline > 0 ? (
           <button

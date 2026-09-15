@@ -795,3 +795,40 @@ export function suscribirCambiosGlobales(callback) {
 
   return () => supabase.removeChannel(canal);
 }
+
+// ==========================================
+// LIMPIEZA DE POSICIONES FANTASMA AL CAMBIO DE TURNO
+// ==========================================
+export async function limpiarPosicionesFantasmaDB(deviceId, usuarioIdActual) {
+  if (!supabase || !navigator.onLine) return 0;
+  if (!deviceId) return 0;
+  try {
+    // Borrar todas las posiciones que vinieron de ESTE dispositivo
+    // y que NO sean del usuario que acaba de iniciar sesión
+    let query = supabase.from('posiciones_en_vivo').delete().eq('device_id', deviceId);
+    if (usuarioIdActual) {
+      query = query.neq('usuario_id', usuarioIdActual);
+    }
+    const { error } = await query;
+    if (error) {
+      console.warn('No se pudieron limpiar posiciones fantasma:', error.message);
+      return 0;
+    }
+    console.log('🧹 Fantasmas limpiados correctamente');
+    return 1;
+  } catch (err) {
+    console.warn('Error limpiando fantasmas:', err);
+    return 0;
+  }
+}
+
+export async function eliminarMiPosicionDB(usuarioId) {
+  if (!supabase || !navigator.onLine) return;
+  if (!usuarioId) return;
+  try {
+    await supabase.from('posiciones_en_vivo').delete().eq('usuario_id', usuarioId);
+    console.log('🚪 Posición propia eliminada al cerrar sesión');
+  } catch (err) {
+    console.warn('No se pudo eliminar la posición propia:', err);
+  }
+}

@@ -6,6 +6,7 @@ import {
 import { FASES_OBRA, CAT_ACTIVIDAD_VISITA } from '../data/constants';
 import { subirArchivoSupabase } from '../lib/supabase';
 import { iniciarDictado } from '../lib/dictado';
+import { useSwipeToClose } from '../hooks/useSwipeToClose';
 
 function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
@@ -49,6 +50,8 @@ export default function ModalVisita({
   const [grabandoVoz, setGrabandoVoz] = useState(false);
 
   const dictadoRef = useRef(null);
+
+  const { translateY, handlers: swipeHandlers } = useSwipeToClose(onClose, { threshold: 120 });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -166,9 +169,19 @@ export default function ModalVisita({
 
   return (
     <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="w-full sm:max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
+      <div 
+        className="w-full sm:max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200"
+        style={{ 
+          transform: `translateY(${translateY}px)`,
+          transition: translateY === 0 ? 'transform 0.25s ease-out' : 'none'
+        }}
+      >
         
-        <div className="pt-2 pb-1 sm:hidden">
+        <div 
+          {...swipeHandlers}
+          className="pt-2 pb-1 cursor-grab active:cursor-grabbing"
+          style={{ touchAction: 'none' }}
+        >
           <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
         </div>
 

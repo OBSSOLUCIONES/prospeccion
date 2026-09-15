@@ -73,6 +73,12 @@ export default function PipelineTab({
   const [filtroEstadoObra, setFiltroEstadoObra] = useState('ACTIVA');
   const [modalFiltrosAbierto, setModalFiltrosAbierto] = useState(false);
   const [criterioOrden, setCriterioOrden] = useState('CERCANIA');
+  const [chipsActivos, setChipsActivos] = useState({
+    sucursal: false,
+    frias: false,
+    hoy: false,
+    sinCliente: false
+  });
 
   const obrasPorSucursal = obras.filter(o => 
     filtroSucursal === 'TODAS' || o.sucursal === filtroSucursal
@@ -219,6 +225,52 @@ export default function PipelineTab({
             </span>
           )}
         </button>
+      </div>
+
+      {/* CHIPS DE FILTROS RÁPIDOS */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        {[
+          { id: 'hoy', label: '✓ Hoy', color: 'emerald' },
+          { id: 'frias', label: '❄️ Frías', color: 'rose' },
+          { id: 'sinCliente', label: '👤 Sin Cliente', color: 'amber' },
+          ...(esAdmin ? [{ id: 'sucursal', label: `📍 ${filtroSucursal === 'TODAS' ? 'Todas' : filtroSucursal}`, color: 'blue' }] : [])
+        ].map(chip => {
+          const activo = chipsActivos[chip.id] || 
+            (chip.id === 'frias' && filtroEspecial === 'FRIAS') ||
+            (chip.id === 'hoy' && filtroEspecial === 'HOY') ||
+            (chip.id === 'sinCliente' && filtroEspecial === 'SIN_CLIENTE') ||
+            (chip.id === 'sucursal' && filtroSucursal !== 'TODAS');
+          
+          const handleClickChip = () => {
+            if (chip.id === 'frias') {
+              setFiltroEspecial(filtroEspecial === 'FRIAS' ? 'TODAS' : 'FRIAS');
+              setCriterioOrden('DIAS_SIN_VISITA');
+            } else if (chip.id === 'hoy') {
+              setFiltroEspecial(filtroEspecial === 'HOY' ? 'TODAS' : 'HOY');
+            } else if (chip.id === 'sinCliente') {
+              setFiltroEspecial(filtroEspecial === 'SIN_CLIENTE' ? 'TODAS' : 'SIN_CLIENTE');
+            } else if (chip.id === 'sucursal') {
+              setModalFiltrosAbierto(true);
+            }
+          };
+
+          return (
+            <button
+              key={chip.id}
+              type="button"
+              onClick={handleClickChip}
+              className={`min-h-[36px] px-3.5 py-1.5 rounded-full font-black text-xs whitespace-nowrap border transition-all active:scale-95 ${
+                activo 
+                  ? chip.color === 'rose' ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
+                    : chip.color === 'emerald' ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                    : chip.color === 'amber' ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
+                    : 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-300/80 hover:bg-slate-50'
+              }`}>
+              {chip.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* 3. Ordenamiento Táctil */}

@@ -5,6 +5,11 @@
   "server": {
     "androidScheme": "https"
   },
+  "android": {
+    "allowMixedContent": true,
+    "appendUserAgent": "OBS-APP-v5",
+    "webContentsDebuggingEnabled": true
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0,
