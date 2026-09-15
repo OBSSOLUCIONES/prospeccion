@@ -74,7 +74,7 @@ async function eliminarArchivosFisicosStorage(listaUrls = []) {
     await supabase.storage
       .from('evidencias-obras')
       .remove(rutas);
-    console.log(`✅ ${rutas.length} archivo(s) eliminados del Storage`);
+    console.log(`${rutas.length} archivo(s) eliminados del Storage`);
   } catch (err) {
     console.warn('Aviso borrando archivos de Storage:', err);
   }
@@ -113,7 +113,7 @@ export async function encolarAccionOffline(accion) {
       colaLocal.push(accion);
       localStorage.setItem('obs_cola_offline', JSON.stringify(colaLocal));
       window.dispatchEvent(new Event('obs_cola_actualizada'));
-      notificarToast('📡 Sin señal: guardado localmente en la tablet', 'advertencia');
+            notificarToast('Guardado en la tablet · Sin señal', 'advertencia');
       return;
     }
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -121,7 +121,7 @@ export async function encolarAccionOffline(accion) {
     store.put(accion);
     tx.oncomplete = () => {
       window.dispatchEvent(new Event('obs_cola_actualizada'));
-      notificarToast('📡 Sin señal: guardado localmente en la tablet', 'advertencia');
+            notificarToast('Guardado en la tablet · Sin señal', 'advertencia');
     };
   } catch (err) {
     console.warn('Error encolando acción offline:', err);
@@ -303,7 +303,7 @@ async function ejecutarUpsertSeguro(tabla, filaOriginal) {
       continue;
     }
 
-    notificarToast(`⚠️ Error en ${tabla}: ${error.message}`, 'error');
+    notificarToast(`Error en ${tabla}: ${error.message}`, 'error');
     return { ok: false, error };
   }
 
@@ -364,7 +364,7 @@ export async function guardarClienteDB(cliente) {
   if (!res.ok) {
     await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
   } else {
-    notificarToast('✅ Cliente guardado en la nube', 'exito');
+    notificarToast(' Cliente guardado en la nube', 'exito');
   }
 }
 
@@ -377,10 +377,10 @@ export async function eliminarClienteDB(id) {
   try {
     const { error } = await supabase.from('clientes').delete().eq('id', idLimpio);
     if (error) {
-      notificarToast(`⚠️ Error eliminando cliente: ${error.message}`, 'error');
+      notificarToast(`Error eliminando cliente: ${error.message}`, 'error');
       await encolarAccionOffline({ id: `del_cli_${idLimpio}_${Date.now()}`, tabla: 'clientes_delete', datos: { id: idLimpio } });
     } else {
-      notificarToast('🗑️ Cliente eliminado de Supabase', 'info');
+      notificarToast('Cliente eliminado de Supabase', 'info');
     }
   } catch {
     await encolarAccionOffline({ id: `del_cli_${idLimpio}_${Date.now()}`, tabla: 'clientes_delete', datos: { id: idLimpio } });
@@ -442,7 +442,7 @@ export async function guardarObraDB(obra) {
   if (!res.ok) {
     await encolarAccionOffline({ id: `obr_${fila.id}_${Date.now()}`, tabla: 'obras', datos: fila });
   } else {
-    notificarToast('✅ Obra guardada en la nube', 'exito');
+    notificarToast('Obra guardada en la nube', 'exito');
   }
 }
 
@@ -494,10 +494,10 @@ export async function eliminarObraDB(id, contextoLocal = {}) {
     const { error } = await supabase.from('obras').delete().eq('id', idLimpio);
 
     if (error) {
-      notificarToast(`⚠️ Error eliminando obra: ${error.message}`, 'error');
+      notificarToast(`Error eliminando obra: ${error.message}`, 'error');
       await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
     } else {
-      notificarToast('🗑️ Obra y archivos destruidos con éxito', 'info');
+      notificarToast('Obra y archivos destruidos con éxito', 'info');
     }
   } catch (err) {
     await encolarAccionOffline({ id: `del_obr_${idLimpio}_${Date.now()}`, tabla: 'obras_delete', datos: { id: idLimpio } });
@@ -562,7 +562,7 @@ export async function guardarVisitaDB(visita) {
   if (!res.ok) {
     await encolarAccionOffline({ id: `vis_${fila.id}_${Date.now()}`, tabla: 'visitas', datos: fila });
   } else {
-    notificarToast('✅ Check-in registrado en Supabase', 'exito');
+    notificarToast('Check-in registrado en Supabase', 'exito');
   }
 }
 
@@ -584,10 +584,10 @@ export async function eliminarVisitaDB(id, fotosLocales = []) {
 
     const { error } = await supabase.from('visitas').delete().eq('id', idLimpio);
     if (error) {
-      notificarToast(`⚠️ Error eliminando visita: ${error.message}`, 'error');
+      notificarToast(`Error eliminando visita: ${error.message}`, 'error');
       await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
     } else {
-      notificarToast('🗑️ Visita eliminada de Supabase', 'info');
+      notificarToast('Visita eliminada de Supabase', 'info');
     }
   } catch (err) {
     await encolarAccionOffline({ id: `del_vis_${idLimpio}_${Date.now()}`, tabla: 'visitas_delete', datos: { id: idLimpio } });
@@ -652,7 +652,7 @@ export async function guardarMovimientoDB(mov) {
   if (!res.ok) {
     await encolarAccionOffline({ id: `mov_${fila.id}_${Date.now()}`, tabla: 'movimientos', datos: fila });
   } else {
-    notificarToast(`✅ ${fila.comprobante} guardada en Supabase`, 'exito');
+    notificarToast(`${fila.comprobante} guardada en Supabase`, 'exito');
   }
 }
 
@@ -777,7 +777,7 @@ export async function sincronizarColaOffline() {
   }
 
   if (sincronizados > 0) {
-    notificarToast(`🚀 ${sincronizados} registro(s) sincronizados con la nube`, 'exito');
+        notificarToast(`${sincronizados} registro(s) sincronizados`, 'exito');
   }
 
   return sincronizados;

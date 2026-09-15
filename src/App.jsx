@@ -353,12 +353,12 @@ export default function App() {
   useEffect(() => {
     const manejarOnline = () => {
       setEstaOnline(true);
-      notificarToast('🟢 Conexión a internet restablecida', 'exito');
+            notificarToast('Conexión restablecida', 'exito');
       ejecutarSincronizacionOffline();
     };
     const manejarOffline = () => {
       setEstaOnline(false);
-      notificarToast('🟡 Sin conexión: operando en modo local seguro', 'advertencia');
+            notificarToast('Sin conexión · Modo campo activo', 'advertencia');
     };
     const manejarColaActualizada = () => refrescarConteoOffline();
 
@@ -874,26 +874,53 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[58px] sm:pt-[70px] font-sans">
       
-      {/* NOTIFICACIONES TOAST NATIVAS */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4">
+            {/* NOTIFICACIONES TOAST PREMIUM */}
+      <div className="fixed top-[68px] sm:top-[76px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-2.5 pointer-events-none w-full max-w-sm px-4">
         {toasts.map(t => (
           <div
             key={t.id}
-            className={`pointer-events-auto px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-2.5 text-xs sm:text-sm font-black animate-in fade-in slide-in-from-top duration-200 backdrop-blur-xl ${
-              t.tipo === 'exito'
-                ? 'bg-[#000b26]/95 text-emerald-300 border-emerald-500/50 shadow-emerald-950/40'
-                : t.tipo === 'error'
-                ? 'bg-[#000b26]/95 text-rose-300 border-rose-500/50 shadow-rose-950/40'
-                : t.tipo === 'advertencia'
-                ? 'bg-[#000b26]/95 text-amber-300 border-amber-500/50 shadow-amber-950/40'
-                : 'bg-[#000b26]/95 text-blue-300 border-[#0091FB]/50 shadow-blue-950/40'
-            }`}
+            className="pointer-events-auto w-full rounded-2xl bg-slate-950/75 backdrop-blur-2xl border border-white/[0.08] shadow-[0_16px_48px_-12px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 ease-out"
           >
-            {t.tipo === 'exito' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-            {t.tipo === 'error' && <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />}
-            {t.tipo === 'advertencia' && <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />}
-            {t.tipo === 'info' && <Info className="w-4 h-4 text-[#0091FB] shrink-0" />}
-            <span className="truncate">{t.mensaje}</span>
+            <div className="flex items-center gap-3 px-4 py-3">
+              {/* Punto LED de estado */}
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                t.tipo === 'exito' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.75)]'
+                : t.tipo === 'error' ? 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.75)]'
+                : t.tipo === 'advertencia' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.75)]'
+                : 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.75)]'
+              }`} />
+
+              {/* Icono minimalista */}
+              <div className={`shrink-0 ${
+                t.tipo === 'exito' ? 'text-emerald-300/90'
+                : t.tipo === 'error' ? 'text-rose-300/90'
+                : t.tipo === 'advertencia' ? 'text-amber-300/90'
+                : 'text-sky-300/90'
+              }`}>
+                {t.tipo === 'exito' && <CheckCircle2 className="w-[15px] h-[15px]" strokeWidth={2.4} />}
+                {t.tipo === 'error' && <AlertTriangle className="w-[15px] h-[15px]" strokeWidth={2.4} />}
+                {t.tipo === 'advertencia' && <AlertCircle className="w-[15px] h-[15px]" strokeWidth={2.4} />}
+                {t.tipo === 'info' && <Info className="w-[15px] h-[15px]" strokeWidth={2.4} />}
+              </div>
+
+              {/* Texto limpio y sutil */}
+              <span className="text-[13px] font-medium text-white/85 leading-tight tracking-tight truncate">
+                {t.mensaje}
+              </span>
+            </div>
+
+            {/* Barra de progreso inferior tipo Linear/Vercel */}
+            <div className="h-[2px] w-full bg-white/[0.06]">
+              <div
+                className={`h-full ${
+                  t.tipo === 'exito' ? 'bg-emerald-400/70'
+                  : t.tipo === 'error' ? 'bg-rose-400/70'
+                  : t.tipo === 'advertencia' ? 'bg-amber-400/70'
+                  : 'bg-sky-400/70'
+                }`}
+                style={{ animation: 'toast-progress 3.5s linear forwards' }}
+              />
+            </div>
           </div>
         ))}
       </div>

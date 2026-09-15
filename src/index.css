@@ -83,3 +83,14 @@
   transform: scale(0.96);
   opacity: 0.88;
 }
+
+
+/* Animación de la barra de progreso de los toasts premium */
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
