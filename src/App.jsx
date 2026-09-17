@@ -1,8 +1,11 @@
-// src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { AlertTriangle, MapPin, Zap, CheckCircle2, AlertCircle, Info, Compass } from 'lucide-react';
+import { 
+  AlertTriangle, MapPin, Zap, CheckCircle2, AlertCircle, Info, Compass, 
+  Download, FileSpreadsheet, X, Globe 
+} from 'lucide-react';
 import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
@@ -11,7 +14,9 @@ import {
   OBRAS_INICIALES, 
   VISITAS_INICIALES, 
   MOVIMIENTOS_INICIALES, 
-  USUARIOS_INICIALES 
+  USUARIOS_INICIALES,
+  SUCURSALES,
+  CAT_TIPOS_OBRA
 } from './data/constants';
 
 import Header from './components/Header';
@@ -22,6 +27,7 @@ import MapaTab from './components/MapaTab';
 import ResumenKpis from './components/ResumenKpis';
 
 import ModalExpedienteObra from './components/ModalExpedienteObra';
+import ModalExpedienteCliente from './components/ModalExpedienteCliente';
 import ModalObra from './components/ModalObra';
 import ModalVisita from './components/ModalVisita';
 import ModalComercial from './components/ModalComercial';
@@ -110,11 +116,69 @@ function sanitizarAMayusculas(obj) {
   return res;
 }
 
+// DESCARGADOR UNIVERSAL PARA PC Y APK
+async function descargarArchivoUniversal({ nombre, contenidoBase64, mimeType, blobTexto }) {
+  const esNativo = Capacitor.isNativePlatform();
+
+  if (esNativo) {
+    try {
+      const archivo = await Filesystem.writeFile({
+        path: nombre,
+        data: contenidoBase64,
+        directory: Directory.Cache
+      });
+
+      await Share.share({
+        title: 'Descargar Reporte OBS',
+        text: `Reporte generado: ${nombre}`,
+        url: archivo.uri,
+        dialogTitle: 'Guardar o Abrir Archivo'
+      });
+      return true;
+    } catch (err) {
+      console.warn('Error en guardado nativo:', err);
+      notificarToast('Error al procesar descarga en dispositivo', 'error');
+      return false;
+    }
+  } else {
+    try {
+      let blob;
+      if (blobTexto) {
+        blob = new Blob([blobTexto], { type: mimeType });
+      } else {
+        const byteCharacters = atob(contenidoBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        blob = new Blob([byteArray], { type: mimeType });
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      notificarToast(`📥 Descarga iniciada: ${nombre}`, 'exito');
+      return true;
+    } catch (err) {
+      console.warn('Error en descarga web:', err);
+      notificarToast('Error al descargar en PC', 'error');
+      return false;
+    }
+  }
+}
+
 export default function App() {
   const [tab, setTab] = useState('pipeline');
   const [mostrarSplash, setMostrarSplash] = useState(true);
   
   const [modalConfirmarSalida, setModalConfirmarSalida] = useState(false);
+  const [modalOpcionesExportacion, setModalOpcionesExportacion] = useState(false);
   const [toasts, setToasts] = useState([]);
 
   const agregarToast = useCallback((mensaje, tipo = 'info') => {
@@ -186,6 +250,8 @@ export default function App() {
 
   // Modales
   const [obraSeleccionada, setObraSeleccionada] = useState(null);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  
   const [modalObraAbierto, setModalObraAbierto] = useState(false);
   const [obraAEditar, setObraAEditar] = useState(null);
   const [itemAEliminar, setItemAEliminar] = useState(null);
@@ -211,7 +277,6 @@ export default function App() {
 
   const esDirector = usuarioActivo?.rol === 'admin' || usuarioActivo?.sucursal === 'TODAS';
 
-  // Haptic feedback global: vibración suave en cualquier toque de botón
   useEffect(() => {
     const handleClick = (e) => {
       const target = e.target.closest('button, [role="button"]');
@@ -224,6 +289,7 @@ export default function App() {
 
   const algunModalAbierto = Boolean(
     obraSeleccionada || 
+    clienteSeleccionado ||
     modalObraAbierto || 
     modalVisitaAbierto || 
     modalComercialAbierto || 
@@ -235,10 +301,10 @@ export default function App() {
     itemAEliminar ||
     modalRutaDia ||
     modalBusquedaGlobal ||
-    modalChat
+    modalChat ||
+    modalOpcionesExportacion
   );
 
-  // Botón de retroceso de Android
   useEffect(() => {
     let listener = null;
 
@@ -246,6 +312,7 @@ export default function App() {
       try {
         listener = await CapApp.addListener('backButton', () => {
           if (modalConfirmarSalida) { setModalConfirmarSalida(false); return; }
+          if (modalOpcionesExportacion) { setModalOpcionesExportacion(false); return; }
           if (visorModal) { setVisorModal(null); return; }
           if (modalBusquedaGlobal) { setModalBusquedaGlobal(false); return; }
           if (modalChat) { setModalChat(false); return; }
@@ -258,6 +325,7 @@ export default function App() {
           if (modalObraAbierto) { setModalObraAbierto(false); return; }
           if (modalCliente) { setModalCliente(false); return; }
           if (modalKpisAbierto) { setModalKpisAbierto(false); return; }
+          if (clienteSeleccionado) { setClienteSeleccionado(null); return; }
           if (obraSeleccionada) { setObraSeleccionada(null); return; }
 
           setModalConfirmarSalida(true);
@@ -275,9 +343,9 @@ export default function App() {
       }
     };
   }, [
-    modalConfirmarSalida, visorModal, destinoRuta, mapaPickerConfig,
+    modalConfirmarSalida, modalOpcionesExportacion, visorModal, destinoRuta, mapaPickerConfig,
     itemAEliminar, modalVisitaAbierto, modalComercialAbierto,
-    modalObraAbierto, modalCliente, modalKpisAbierto, obraSeleccionada,
+    modalObraAbierto, modalCliente, modalKpisAbierto, obraSeleccionada, clienteSeleccionado,
     modalRutaDia, modalBusquedaGlobal, modalChat
   ]);
 
@@ -288,49 +356,6 @@ export default function App() {
       window.close();
     }
   };
-
-  // Screen WakeLock
-  useEffect(() => {
-    let wakeLockInstance = null;
-    const solicitarWakeLock = async () => {
-      if ('wakeLock' in navigator && usuarioActivo) {
-        try {
-          wakeLockInstance = await navigator.wakeLock.request('screen');
-        } catch (err) {
-          console.warn('WakeLock no disponible:', err);
-        }
-      }
-    };
-
-    solicitarWakeLock();
-
-    const manejarVisibilidad = () => {
-      if (document.visibilityState === 'visible') {
-        solicitarWakeLock();
-      }
-    };
-
-    document.addEventListener('visibilitychange', manejarVisibilidad);
-
-    return () => {
-      document.removeEventListener('visibilitychange', manejarVisibilidad);
-      if (wakeLockInstance) {
-        wakeLockInstance.release().catch(() => {});
-      }
-    };
-  }, [usuarioActivo]);
-
-  const obraProxima = useMemo(() => {
-    if (esDirector || !tabletPos?.lat || !tabletPos?.lng) return null;
-    for (const o of obras) {
-      if (!o.lat || !o.lng || o.estadoObra === 'TERMINADA') continue;
-      const dist = calcularDistanciaMetros(tabletPos.lat, tabletPos.lng, o.lat, o.lng);
-      if (dist <= 180) {
-        return { obra: o, distancia: dist };
-      }
-    }
-    return null;
-  }, [tabletPos, obras, esDirector]);
 
   const refrescarConteoOffline = useCallback(async () => {
     const cant = await contarItemsColaOffline();
@@ -353,12 +378,12 @@ export default function App() {
   useEffect(() => {
     const manejarOnline = () => {
       setEstaOnline(true);
-            notificarToast('Conexión restablecida', 'exito');
+      notificarToast('Conexión restablecida', 'exito');
       ejecutarSincronizacionOffline();
     };
     const manejarOffline = () => {
       setEstaOnline(false);
-            notificarToast('Sin conexión · Modo campo activo', 'advertencia');
+      notificarToast('Sin conexión · Modo campo activo', 'advertencia');
     };
     const manejarColaActualizada = () => refrescarConteoOffline();
 
@@ -400,7 +425,6 @@ export default function App() {
     }
   }, []);
 
-  // Pull-to-refresh: arrastra hacia abajo para recargar datos
   const { pulling, distance } = usePullToRefresh(recargarDatosNube, { threshold: 80 });
 
   useEffect(() => {
@@ -431,15 +455,8 @@ export default function App() {
     if (usuarioActivo) {
       localStorage.setItem('app_obras_usuario_activo', JSON.stringify(usuarioActivo));
       setFiltroSucursal(usuarioActivo.sucursal === 'TODAS' ? 'TODAS' : usuarioActivo.sucursal);
-
-      // Limpiar posiciones fantasma: si esta tablet fue usada por otro usuario
-      // antes, borrar su rastro del mapa en vivo para que el Director no vea zombies.
       limpiarPosicionesFantasmaDB(deviceIdRef.current, usuarioActivo.id);
-
-      // Inicializar notificaciones nativas (solo Android/APK)
-      inicializarNotificaciones().then((ok) => {
-        if (ok) console.log('🔔 Notificaciones inicializadas');
-      });
+      inicializarNotificaciones();
     } else {
       localStorage.removeItem('app_obras_usuario_activo');
       cancelarRecordatorios();
@@ -478,20 +495,9 @@ export default function App() {
         }
       },
       (error) => {
-        // Distinguir entre negación real de permiso y simple demora del GPS
-        console.warn('GPS callback error:', error.code, error.message);
-        if (error.code === 1) {
-          // PERMISSION_DENIED: el usuario dijo "no" o lo revocó
-          setGpsEstado('bloqueado');
-        } else if (error.code === 2) {
-          // POSITION_UNAVAILABLE: sin señal de satélites todavía (interiores, sótano)
-          setGpsEstado('buscando');
-        } else if (error.code === 3) {
-          // TIMEOUT: tardó más de lo esperado pero el permiso está bien
-          setGpsEstado('calibrando');
-        } else {
-          setGpsEstado('buscando');
-        }
+        if (error.code === 1) setGpsEstado('bloqueado');
+        else if (error.code === 2) setGpsEstado('buscando');
+        else setGpsEstado('calibrando');
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
     );
@@ -516,6 +522,7 @@ export default function App() {
     const clienteLimpio = sanitizarAMayusculas(nuevoCliente);
     if (clienteAEditar) {
       setClientes(prev => prev.map(c => c.id === clienteAEditar.id ? clienteLimpio : c));
+      if (clienteSeleccionado && clienteSeleccionado.id === clienteLimpio.id) setClienteSeleccionado(clienteLimpio);
       setClienteAEditar(null);
     } else {
       setClientes(prev => [clienteLimpio, ...prev]);
@@ -541,6 +548,7 @@ export default function App() {
     } else if (itemAEliminar.tipo === 'cliente') {
       const id = itemAEliminar.data.id;
       setClientes(prev => prev.filter(c => c.id !== id));
+      if (clienteSeleccionado && clienteSeleccionado.id === id) setClienteSeleccionado(null);
       await eliminarClienteDB(id);
     }
 
@@ -560,7 +568,11 @@ export default function App() {
 
     setObras(prev => prev.map(o => {
       if (o.id === visitaLimpia.obraId) {
-        const obraActualizada = { ...o, estatusFase: visitaLimpia.estatus };
+        const obraActualizada = { 
+          ...o, 
+          estatusFase: visitaLimpia.estatus,
+          etapaComercial: visitaLimpia.etapaComercial || o.etapaComercial
+        };
         guardarObraDB(obraActualizada);
         if (obraSeleccionada && obraSeleccionada.id === o.id) setObraSeleccionada(obraActualizada);
         return obraActualizada;
@@ -626,11 +638,9 @@ export default function App() {
   };
 
   // =========================================================================
-  // EXPORTADOR POWER BI Y EXCEL (COMPATIBLE CON NAVEGADOR Y APK ANDROID)
+  // MOTOR 1: EXCEL POWER BI CON HIPERVÍNCULOS REALES CLIQUEABLES
   // =========================================================================
-  const exportarAExcel = async () => {
-    if (!esDirector) return;
-
+  const construirLibroExcelPowerBI = () => {
     const obrasAExportar = filtroSucursal === 'TODAS'
       ? obras
       : obras.filter(o => o.sucursal === filtroSucursal);
@@ -639,229 +649,312 @@ export default function App() {
       ? clientes
       : clientes.filter(c => c.sucursal === filtroSucursal);
 
-    // 1. Dim_Clientes
-    const hojaClientes = clientesAExportar.map(c => {
-      const obrasCliente = obras.filter(o => o.clienteId === c.id);
-      const obrasIds = obrasCliente.map(o => o.id);
-      const movsCliente = movimientos.filter(m => obrasIds.includes(m.obraId));
-      
-      const totalCotizado = movsCliente
-        .filter(m => m.tipo === 'COTIZACION')
-        .reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
+    const visitasAExportar = filtroSucursal === 'TODAS'
+      ? visitas
+      : visitas.filter(v => v.sucursal === filtroSucursal);
 
-      const totalVendido = movsCliente
-        .filter(m => m.tipo === 'VENTA')
-        .reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
+    const obrasIdsValidas = obrasAExportar.map(o => o.id);
+    const movsAExportar = movimientos.filter(m => obrasIdsValidas.includes(m.obraId));
 
-      const linkGoogleMaps = (c.lat && c.lng) 
-        ? `https://www.google.com/maps?q=${c.lat},${c.lng}` 
-        : (c.ubicacion || 'SIN UBICACIÓN');
+    const eventosUnificados = [];
 
-      return {
-        cliente_id: c.id,
-        id_red_azul: c.idRedAzul || 'SIN_ID',
-        nombre_cliente: c.nombreCliente,
-        sucursal: c.sucursal,
-        clasificacion_cliente: c.tipoCliente || 'PROSPECTO',
-        tipo_mercado: c.tipoMercado || 'GENERAL',
-        responsable_contacto: c.responsable || 'SIN ENCARGADO',
-        telefono_contacto: c.contacto || 'SIN TELEFONO',
-        correo_contacto: c.correo || 'SIN CORREO',
-        total_obras_asociadas: obrasCliente.length,
-        total_cotizado_mxn: totalCotizado,
-        total_vendido_mxn: totalVendido,
-        link_ubicacion_maps: linkGoogleMaps,
-        direccion_fiscal: c.direccion || ''
-      };
+    visitasAExportar.forEach(v => {
+      const obra = obras.find(o => o.id === v.obraId);
+      const cliente = obra ? clientes.find(c => c.id === obra.clienteId) : null;
+      const tipoObj = obra ? CAT_TIPOS_OBRA.find(t => t.id === obra.tipoObra) : null;
+      const latGps = v.latGpsReal || obra?.lat;
+      const lngGps = v.lngGpsReal || obra?.lng;
+
+      const linkGps = (latGps && lngGps)
+        ? `https://maps.google.com/?q=${latGps},${lngGps}`
+        : '';
+
+      let linkFotos = '';
+      if (Array.isArray(v.fotos) && v.fotos.length > 0) {
+        linkFotos = v.fotos[0];
+      }
+
+      eventosUnificados.push({
+        ID: String(v.id || ''),
+        FECHA: String(v.fecha || ''),
+        SUCURSAL: String(v.sucursal || ''),
+        ASESOR: String(v.asesorNombre || 'ASESOR'),
+        TIPO_EVENTO: 'VISITA DE SUPERVISIÓN',
+        PROYECTO: String(obra ? obra.nombre : (v.proyecto || 'OBRA')),
+        TIPOLOGIA_OBRA: tipoObj ? `${tipoObj.icono} ${tipoObj.label}` : 'CASA HABITACIÓN',
+        CLIENTE: String(cliente ? cliente.nombreCliente : 'PROSPECCIÓN DIRECTA'),
+        PERFIL_CLIENTE: String(cliente ? (cliente.tipoMercado || 'NO DEFINIDO') : 'SIN ASIGNAR'),
+        TIPO_DESARROLLO: String(obra ? (obra.tipoDesarrollo || 'OBRA NUEVA') : 'OBRA NUEVA'),
+        ETAPA_COMERCIAL_OBS: String(v.etapaComercial || obra?.etapaComercial || 'PROSPECTO'),
+        FASE_CONSTRUCTIVA_FISICA: String(v.estatus || 'CIMENTACIÓN'),
+        ACTIVIDAD: String(v.actividad || 'SUPERVISIÓN TÉCNICA'),
+        MONTO: 0,
+        TIPO_DE_ENTREGA: 'N/A',
+        FORMA_DE_PAGO: 'N/A',
+        FOLIO_DOCUMENTO: 'N/A',
+        LINK_DOCUMENTO: '',
+        ANTECEDE_O_COTIZACION: 'N/A',
+        FOTOS: linkFotos,
+        UBICACIÓN_GPS: linkGps,
+        AUDITORÍA_TERRITORIAL: `${v.auditoriaEstado === 'en_sitio' ? 'EN SITIO' : 'REMOTO'} (${v.distanciaAuditoriaMetros || 0}m)`,
+        OBSERVACIONES: String(v.observaciones || '')
+      });
     });
 
-    // 2. Dim_Obras
-    const hojaObras = obrasAExportar.map(o => {
+    movsAExportar.forEach(m => {
+      const obra = obras.find(o => o.id === m.obraId);
+      const cliente = obra ? clientes.find(c => c.id === obra.clienteId) : null;
+      const tipoObj = obra ? CAT_TIPOS_OBRA.find(t => t.id === obra.tipoObra) : null;
+      const esVenta = m.tipo === 'VENTA';
+      const linkDoc = m.documentoAdjunto?.url || '';
+      const linkGps = (obra?.lat && obra?.lng) ? `https://maps.google.com/?q=${obra.lat},${obra.lng}` : '';
+
+      eventosUnificados.push({
+        ID: String(m.id || ''),
+        FECHA: String(m.fecha || ''),
+        SUCURSAL: String(obra ? obra.sucursal : 'GENERAL'),
+        ASESOR: 'ASESOR A CARGO',
+        TIPO_EVENTO: esVenta ? `VENTA (${m.comprobante})` : 'COTIZACIÓN',
+        PROYECTO: String(obra ? obra.nombre : 'OBRA'),
+        TIPOLOGIA_OBRA: tipoObj ? `${tipoObj.icono} ${tipoObj.label}` : 'CASA HABITACIÓN',
+        CLIENTE: String(cliente ? cliente.nombreCliente : 'VENTA DIRECTA'),
+        PERFIL_CLIENTE: String(cliente ? (cliente.tipoMercado || 'NO DEFINIDO') : 'SIN ASIGNAR'),
+        TIPO_DESARROLLO: String(obra ? (obra.tipoDesarrollo || 'OBRA NUEVA') : 'OBRA NUEVA'),
+        ETAPA_COMERCIAL_OBS: esVenta ? 'EJECUCIÓN' : (m.estatus === 'GANADA' ? 'GANADA' : 'COTIZACIÓN'),
+        FASE_CONSTRUCTIVA_FISICA: String(obra ? obra.estatusFase : 'OBRA GRIS'),
+        ACTIVIDAD: esVenta ? 'SUMINISTRO DE MATERIAL' : 'OFERTA ECONÓMICA',
+        MONTO: Number(m.monto) || 0,
+        TIPO_DE_ENTREGA: String(m.tipoEntrega || 'DOMICILIO'),
+        FORMA_DE_PAGO: String(m.formaPago || 'N/A'),
+        FOLIO_DOCUMENTO: String(m.folio || ''),
+        LINK_DOCUMENTO: linkDoc,
+        ANTECEDE_O_COTIZACION: String(m.cotizacionOrigenId || 'DIRECTA'),
+        FOTOS: '',
+        UBICACIÓN_GPS: linkGps,
+        AUDITORÍA_TERRITORIAL: 'REGISTRO COMERCIAL',
+        OBSERVACIONES: String(m.observaciones || '')
+      });
+    });
+
+    eventosUnificados.sort((a, b) => new Date(b.FECHA.replace(' ', 'T')) - new Date(a.FECHA.replace(' ', 'T')));
+
+    const wsSabana = XLSX.utils.json_to_sheet(eventosUnificados);
+    
+    // Post-procesador para hacer celdas cliqueables
+    const hacerColumnaCliqueable = (ws, nombreColumna, etiquetaBoton) => {
+      if (!ws['!ref']) return;
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      let targetColIndex = -1;
+
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const headerCell = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+        if (headerCell && headerCell.v === nombreColumna) {
+          targetColIndex = C;
+          break;
+        }
+      }
+
+      if (targetColIndex === -1) return;
+
+      for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: targetColIndex });
+        const cell = ws[cellAddress];
+        if (cell && typeof cell.v === 'string' && cell.v.startsWith('http')) {
+          const url = cell.v;
+          cell.l = { Target: url, Tooltip: 'Clic para abrir enlace' };
+          cell.v = etiquetaBoton;
+          cell.f = `HYPERLINK("${url}", "${etiquetaBoton}")`;
+          cell.t = 's';
+        }
+      }
+    };
+
+    hacerColumnaCliqueable(wsSabana, 'UBICACIÓN_GPS', '📍 Ver Google Maps');
+    hacerColumnaCliqueable(wsSabana, 'LINK_DOCUMENTO', '📄 Ver Documento');
+    hacerColumnaCliqueable(wsSabana, 'FOTOS', '📸 Ver Foto');
+
+    const dimClientes = clientesAExportar.map(c => ({
+      cliente_id: String(c.id || ''),
+      id_red_azul: String(c.idRedAzul || 'SIN_ID'),
+      nombre_cliente: String(c.nombreCliente || ''),
+      sucursal: String(c.sucursal || ''),
+      perfil_especialidad: String(c.tipoMercado || 'CLIENTE FINAL'),
+      clasificacion_cliente: String(c.tipoCliente || 'PROSPECTO'),
+      responsable_contacto: String(c.responsable || 'SIN ASIGNAR'),
+      telefono_contacto: String(c.contacto || 'SIN TELEFONO'),
+      correo_contacto: String(c.correo || 'SIN CORREO'),
+      ubicacion_maps: (c.lat && c.lng) ? `https://maps.google.com/?q=${c.lat},${c.lng}` : '',
+      direccion_fiscal: String(c.direccion || '')
+    }));
+
+    const wsClientes = XLSX.utils.json_to_sheet(dimClientes);
+    hacerColumnaCliqueable(wsClientes, 'ubicacion_maps', '📍 Abrir Mapa');
+
+    const dimObras = obrasAExportar.map(o => {
       const cli = clientes.find(c => c.id === o.clienteId);
-      const visObra = visitas.filter(v => v.obraId === o.id);
-      const movsObra = movimientos.filter(m => m.obraId === o.id);
-      
-      const ultima = visObra.sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')))[0];
-      const diasSinVisita = ultima 
-        ? Math.max(0, Math.floor((Date.now() - new Date(ultima.fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24)))
-        : 999;
-
-      const totalCotizado = movsObra.filter(m => m.tipo === 'COTIZACION').reduce((s, c) => s + (Number(c.monto) || 0), 0);
-      const totalVendido = movsObra.filter(m => m.tipo === 'VENTA').reduce((s, v) => s + (Number(v.monto) || 0), 0);
-
+      const visO = visitas.filter(v => v.obraId === o.id);
+      const tipoObj = CAT_TIPOS_OBRA.find(t => t.id === o.tipoObra);
+      const ultima = visO.sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')))[0];
+      const diasSinVisita = ultima ? Math.max(0, Math.floor((Date.now() - new Date(ultima.fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24))) : 999;
       const fInfo = formatearFechaParaPowerBI(ultima ? ultima.fecha : null);
-      const linkGoogleMapsObra = (o.lat && o.lng) 
-        ? `https://www.google.com/maps?q=${o.lat},${o.lng}` 
-        : 'SIN UBICACIÓN';
 
       return {
-        obra_id: o.id,
-        cliente_id: o.clienteId || 'SIN_CLIENTE',
-        nombre_obra: o.nombre,
-        sucursal: o.sucursal,
-        tipo_desarrollo: o.tipoDesarrollo || 'OBRA NUEVA',
-        fase_constructiva: o.estatusFase,
-        estado_comercial: o.estadoObra || 'ACTIVA',
-        nombre_cliente: cli ? cli.nombreCliente : 'SIN ASIGNAR',
-        responsable_cliente: cli?.responsable || 'SIN DATO',
-        telefono_cliente: cli?.contacto || 'SIN DATO',
-        total_visitas: visObra.length,
+        obra_id: String(o.id || ''),
+        cliente_id: String(o.clienteId || 'SIN_CLIENTE'),
+        nombre_obra: String(o.nombre || ''),
+        sucursal: String(o.sucursal || ''),
+        tipologia_obra: tipoObj ? `${tipoObj.icono} ${tipoObj.label}` : 'CASA HABITACIÓN',
+        etapa_comercial_obs: String(o.etapaComercial || 'PROSPECTO'),
+        fase_constructiva_fisica: String(o.estatusFase || ''),
+        tipo_desarrollo: String(o.tipoDesarrollo || 'OBRA NUEVA'),
+        nombre_cliente: String(cli ? cli.nombreCliente : 'SIN ASIGNAR'),
+        perfil_cliente: String(cli ? (cli.tipoMercado || 'NO DEFINIDO') : 'SIN ASIGNAR'),
+        total_visitas: visO.length,
         dias_sin_visita: diasSinVisita,
         alerta_obra_fria: diasSinVisita > 12 ? 'SI' : 'NO',
         fecha_ultima_visita_iso: fInfo.iso,
         fecha_corta_ultima_visita: fInfo.fecha_corta,
-        id_fecha_ultima_visita: fInfo.id_fecha,
-        total_cotizado_mxn: totalCotizado,
-        total_vendido_mxn: totalVendido,
-        link_ubicacion_maps: linkGoogleMapsObra,
-        direccion: o.direccion || ''
+        ubicacion_maps: (o.lat && o.lng) ? `https://maps.google.com/?q=${o.lat},${o.lng}` : '',
+        direccion: String(o.direccion || '')
       };
     });
 
-    // 3. Fact_Visitas
-    const hojaVisitas = visitas
-      .filter(v => filtroSucursal === 'TODAS' || v.sucursal === filtroSucursal)
-      .map(v => {
-        const fInfo = formatearFechaParaPowerBI(v.fecha);
-        const linkGpsVisita = (v.latGpsReal && v.lngGpsReal)
-          ? `https://www.google.com/maps?q=${v.latGpsReal},${v.lngGpsReal}`
-          : 'SIN COORDENADAS';
-
-        const fotosLista = Array.isArray(v.fotos) ? v.fotos : [];
-
-        return {
-          visita_id: v.id,
-          obra_id: v.obraId,
-          sucursal: v.sucursal,
-          asesor_nombre: v.asesorNombre || 'Asesor',
-          fecha_hora_iso: fInfo.iso,
-          fecha_corta: fInfo.fecha_corta,
-          id_fecha: fInfo.id_fecha,
-          hora_registro: fInfo.hora,
-          fase_detectada: v.estatus,
-          actividad: v.actividad,
-          distancia_auditoria_metros: Number(v.distanciaAuditoriaMetros) || 0,
-          estado_auditoria_gps: v.auditoriaEstado || 'remoto',
-          link_gps_auditoria: linkGpsVisita,
-          link_foto_1: fotosLista[0] || 'SIN FOTO',
-          link_foto_2: fotosLista[1] || '',
-          link_foto_3: fotosLista[2] || '',
-          todos_los_links_fotos: fotosLista.join(' | '),
-          observaciones: v.observaciones || ''
-        };
-      });
-
-    // 4. Fact_Movimientos
-    const obrasIdsValidas = obrasAExportar.map(o => o.id);
-    const hojaMovimientos = movimientos
-      .filter(m => obrasIdsValidas.includes(m.obraId))
-      .map(m => {
-        const fInfo = formatearFechaParaPowerBI(m.fecha);
-        const linkDoc = m.documentoAdjunto?.url || m.documento_adjunto?.url || 'SIN DOCUMENTO';
-
-        return {
-          movimiento_id: m.id,
-          obra_id: m.obraId,
-          tipo_movimiento: m.tipo,
-          tipo_comprobante: m.comprobante || (m.tipo === 'VENTA' ? 'REMISION' : 'COTIZACION'),
-          folio_documento: m.folio,
-          monto_mxn: Number(m.monto) || 0,
-          estatus: m.estatus || 'PENDIENTE',
-          forma_pago: m.formaPago || 'N/A',
-          tipo_entrega: m.tipoEntrega || 'DOMICILIO',
-          fecha_hora_iso: fInfo.iso,
-          fecha_corta: fInfo.fecha_corta,
-          id_fecha: fInfo.id_fecha,
-          hora_registro: fInfo.hora,
-          cotizacion_origen_id: m.cotizacionOrigenId || 'DIRECTA',
-          link_documento_adjunto: linkDoc
-        };
-      });
+    const wsObras = XLSX.utils.json_to_sheet(dimObras);
+    hacerColumnaCliqueable(wsObras, 'ubicacion_maps', '📍 Abrir Mapa');
 
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaClientes), 'Dim_Clientes');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaObras), 'Dim_Obras');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaVisitas), 'Fact_Visitas');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(hojaMovimientos), 'Fact_Movimientos');
+    XLSX.utils.book_append_sheet(libro, wsSabana, 'Sabana_Ejecutiva_360');
+    XLSX.utils.book_append_sheet(libro, wsObras, 'Dim_Obras');
+    XLSX.utils.book_append_sheet(libro, wsClientes, 'Dim_Clientes');
 
-    const fechaHoy = new Date().toISOString().slice(0, 10);
-    const nombreArchivo = `PowerBI_Prospeccion_OBS_${filtroSucursal}_${fechaHoy}.xlsx`;
+    return libro;
+  };
 
-    // DETECCIÓN Y GUARDADO EN ANDROID NATIVO (SHARE SHEET)
+  // =========================================================================
+  // MOTOR 2: KML PARA GOOGLE MY MAPS
+  // =========================================================================
+  const generarKmlParaGoogleMyMaps = () => {
+    const obrasAExportar = filtroSucursal === 'TODAS'
+      ? obras.filter(o => o.lat && o.lng)
+      : obras.filter(o => o.sucursal === filtroSucursal && o.lat && o.lng);
+
+    const clientesAExportar = filtroSucursal === 'TODAS'
+      ? clientes.filter(c => c.lat && c.lng)
+      : clientes.filter(c => c.sucursal === filtroSucursal && c.lat && c.lng);
+
+    let kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>PROSPECCIÓN OBS - ${filtroSucursal}</name>
+    <description>Obras y Clientes georreferenciados para Google My Maps</description>
+`;
+
+    obrasAExportar.forEach(o => {
+      const cli = clientes.find(c => c.id === o.clienteId);
+      const tipoObj = CAT_TIPOS_OBRA.find(t => t.id === o.tipoObra) || CAT_TIPOS_OBRA[0];
+      const descHtml = `<![CDATA[
+        <div style="font-family: Arial, sans-serif; font-size: 13px;">
+          <h3 style="color: #001757; margin-bottom: 4px;">${tipoObj.icono} ${o.nombre}</h3>
+          <p><strong>ID:</strong> ${o.id} | <strong>Sucursal:</strong> ${o.sucursal}</p>
+          <p><strong>Uso de la Obra:</strong> ${tipoObj.label}</p>
+          <p><strong>Etapa OBS:</strong> ${o.etapaComercial || 'PROSPECTO'}</p>
+          <p><strong>Fase Constructiva:</strong> ${o.estatusFase}</p>
+          <p><strong>Cliente:</strong> ${cli ? cli.nombreCliente : 'Prospección directa'}</p>
+          <p><strong>Contacto / Tel:</strong> ${cli ? cli.contacto || 'Sin teléfono' : 'Sin contacto'}</p>
+          <p><strong>Dirección:</strong> ${o.direccion || 'Ubicación satelital'}</p>
+          <hr/>
+          <p><a href="https://maps.google.com/?q=${o.lat},${o.lng}" target="_blank">📍 Abrir Ruta en Google Maps</a></p>
+        </div>
+      ]]>`;
+
+      kml += `
+    <Placemark>
+      <name>${tipoObj.icono} ${o.nombre}</name>
+      <description>${descHtml}</description>
+      <ExtendedData>
+        <Data name="Tipo_Obra"><value>${tipoObj.label}</value></Data>
+        <Data name="Etapa_Comercial"><value>${o.etapaComercial || 'PROSPECTO'}</value></Data>
+        <Data name="Sucursal"><value>${o.sucursal}</value></Data>
+        <Data name="Cliente"><value>${cli ? cli.nombreCliente : 'Sin cliente'}</value></Data>
+      </ExtendedData>
+      <Point>
+        <coordinates>${o.lng},${o.lat},0</coordinates>
+      </Point>
+    </Placemark>`;
+    });
+
+    clientesAExportar.forEach(c => {
+      const descHtml = `<![CDATA[
+        <div style="font-family: Arial, sans-serif; font-size: 13px;">
+          <h3 style="color: #0091FB; margin-bottom: 4px;">👤 ${c.nombreCliente}</h3>
+          <p><strong>ID:</strong> ${c.id} | <strong>Sucursal:</strong> ${c.sucursal}</p>
+          <p><strong>Especialidad / Oficio:</strong> ${c.tipoMercado || 'CLIENTE FINAL'}</p>
+          <p><strong>Encargado:</strong> ${c.responsable || 'Sin asignar'}</p>
+          <p><strong>Teléfono:</strong> ${c.contacto || 'Sin dato'}</p>
+          <p><strong>Dirección Fiscal:</strong> ${c.direccion || 'Domicilio fiscal'}</p>
+        </div>
+      ]]>`;
+
+      kml += `
+    <Placemark>
+      <name>👤 ${c.nombreCliente}</name>
+      <description>${descHtml}</description>
+      <ExtendedData>
+        <Data name="Tipo"><value>CLIENTE</value></Data>
+        <Data name="Especialidad"><value>${c.tipoMercado || 'CLIENTE FINAL'}</value></Data>
+        <Data name="Sucursal"><value>${c.sucursal}</value></Data>
+      </ExtendedData>
+      <Point>
+        <coordinates>${c.lng},${c.lat},0</coordinates>
+      </Point>
+    </Placemark>`;
+    });
+
+    kml += `
+  </Document>
+</kml>`;
+
+    return kml;
+  };
+
+  const ejecutarDescargaExcel = async () => {
+    setModalOpcionesExportacion(false);
     try {
+      const libro = construirLibroExcelPowerBI();
+      const fechaHoy = new Date().toISOString().slice(0, 10);
+      const nombreArchivo = `PowerBI_Prospeccion_OBS_${filtroSucursal}_${fechaHoy}.xlsx`;
       const base64Data = XLSX.write(libro, { bookType: 'xlsx', type: 'base64' });
-      
-      const archivoGuardado = await Filesystem.writeFile({
-        path: nombreArchivo,
-        data: base64Data,
-        directory: Directory.Cache
-      });
 
-      await Share.share({
-        title: 'Reporte Excel Power BI',
-        text: `Reporte de Obras y Clientes (${filtroSucursal}) - PROSPECCIÓN OBS`,
-        url: archivoGuardado.uri,
-        dialogTitle: 'Guardar o Compartir Reporte Excel'
+      await descargarArchivoUniversal({
+        nombre: nombreArchivo,
+        contenidoBase64: base64Data,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
-
-      notificarToast('📊 Reporte generado con éxito', 'exito');
-    } catch (errNativo) {
-      // Fallback para PC / Navegador
-      XLSX.writeFile(libro, nombreArchivo);
-      notificarToast('📊 Reporte Excel descargado', 'exito');
+    } catch (err) {
+      console.warn('Error generando Excel:', err);
+      notificarToast('Error al procesar el archivo Excel', 'error');
     }
   };
 
-  const hoyStr = new Date().toISOString().slice(0, 10);
-  const visitasHoy = visitas.filter(v => v.fecha && v.fecha.startsWith(hoyStr)).length;
-  const metaDiaria = 5;
-  const porcentajeMeta = Math.min(100, Math.round((visitasHoy / metaDiaria) * 100));
-  const totalMontoCotizaciones = movimientos.reduce((acc, m) => acc + (Number(m.monto) || 0), 0);
-  const ventasCerradasTotal = movimientos.filter(m => m.tipo === 'VENTA').length;
-  const totalObrasFrias = obras.filter(o => {
-    const vList = visitas.filter(v => v.obraId === o.id).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    if (!vList.length) return true;
-    const diff = Math.floor((Date.now() - new Date(vList[0].fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24));
-    return diff > 12;
-  }).length;
+  const ejecutarDescargaKmlMyMaps = async () => {
+    setModalOpcionesExportacion(false);
+    try {
+      const kmlString = generarKmlParaGoogleMyMaps();
+      const fechaHoy = new Date().toISOString().slice(0, 10);
+      const nombreArchivo = `GoogleMyMaps_OBS_${filtroSucursal}_${fechaHoy}.kml`;
+      const base64Data = btoa(unescape(encodeURIComponent(kmlString)));
 
-  // Contar mensajes sin leer
-  const refrescarMensajesSinLeer = useCallback(async () => {
-    if (!usuarioActivo) return;
-    const msgs = await obtenerTodosLosMensajesDB(usuarioActivo.id);
-    const sinLeer = msgs.filter(m => m.receptor_id === usuarioActivo.id && !m.leido).length;
-    setMensajesSinLeer(sinLeer);
-  }, [usuarioActivo]);
-
-  useEffect(() => {
-    if (!usuarioActivo) {
-      setMensajesSinLeer(0);
-      return;
+      await descargarArchivoUniversal({
+        nombre: nombreArchivo,
+        contenidoBase64: base64Data,
+        blobTexto: kmlString,
+        mimeType: 'application/vnd.google-earth.kml+xml'
+      });
+    } catch (err) {
+      console.warn('Error generando KML:', err);
+      notificarToast('Error al generar archivo para Google Maps', 'error');
     }
-
-    refrescarMensajesSinLeer();
-
-    const desuscribir = suscribirMensajesEnVivo(usuarioActivo.id, () => {
-      refrescarMensajesSinLeer();
-    });
-
-    return () => desuscribir();
-  }, [usuarioActivo, refrescarMensajesSinLeer]);
-
-  // Programar recordatorio de obras frías (solo en APK)
-  useEffect(() => {
-    if (!usuarioActivo) return;
-    const obrasFriasLista = obras.filter(o => {
-      if (o.estadoObra === 'TERMINADA') return false;
-      const vList = visitas
-        .filter(v => v.obraId === o.id)
-        .sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')));
-      if (!vList.length) return true;
-      const diff = Math.floor((Date.now() - new Date(vList[0].fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24));
-      return diff > 12;
-    });
-    programarRecordatorioObrasFrias(obrasFriasLista);
-  }, [usuarioActivo, obras, visitas]);
+  };
 
   if (mostrarSplash) {
     return <SplashScreen onFinish={() => setMostrarSplash(false)} />;
@@ -872,83 +965,43 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 pb-28 pt-[58px] sm:pt-[70px] font-sans">
+    <div className={`min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 ${tab === 'mapa' ? 'pb-0' : 'pb-28'} pt-[58px] sm:pt-[70px] font-sans`}>
       
-            {/* NOTIFICACIONES TOAST PREMIUM */}
+      {/* Toasts */}
       <div className="fixed top-[68px] sm:top-[76px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-2.5 pointer-events-none w-full max-w-sm px-4">
         {toasts.map(t => (
           <div
             key={t.id}
-            className="pointer-events-auto w-full rounded-2xl bg-slate-950/75 backdrop-blur-2xl border border-white/[0.08] shadow-[0_16px_48px_-12px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 ease-out"
+            className="pointer-events-auto w-full rounded-2xl bg-slate-950/75 backdrop-blur-2xl border border-white/[0.08] shadow-2xl overflow-hidden animate-in fade-in duration-200"
           >
             <div className="flex items-center gap-3 px-4 py-3">
-              {/* Punto LED de estado */}
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                t.tipo === 'exito' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.75)]'
-                : t.tipo === 'error' ? 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.75)]'
-                : t.tipo === 'advertencia' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.75)]'
-                : 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.75)]'
+                t.tipo === 'exito' ? 'bg-emerald-400' : t.tipo === 'error' ? 'bg-rose-400' : 'bg-sky-400'
               }`} />
-
-              {/* Icono minimalista */}
-              <div className={`shrink-0 ${
-                t.tipo === 'exito' ? 'text-emerald-300/90'
-                : t.tipo === 'error' ? 'text-rose-300/90'
-                : t.tipo === 'advertencia' ? 'text-amber-300/90'
-                : 'text-sky-300/90'
-              }`}>
-                {t.tipo === 'exito' && <CheckCircle2 className="w-[15px] h-[15px]" strokeWidth={2.4} />}
-                {t.tipo === 'error' && <AlertTriangle className="w-[15px] h-[15px]" strokeWidth={2.4} />}
-                {t.tipo === 'advertencia' && <AlertCircle className="w-[15px] h-[15px]" strokeWidth={2.4} />}
-                {t.tipo === 'info' && <Info className="w-[15px] h-[15px]" strokeWidth={2.4} />}
-              </div>
-
-              {/* Texto limpio y sutil */}
-              <span className="text-[13px] font-medium text-white/85 leading-tight tracking-tight truncate">
-                {t.mensaje}
-              </span>
-            </div>
-
-            {/* Barra de progreso inferior tipo Linear/Vercel */}
-            <div className="h-[2px] w-full bg-white/[0.06]">
-              <div
-                className={`h-full ${
-                  t.tipo === 'exito' ? 'bg-emerald-400/70'
-                  : t.tipo === 'error' ? 'bg-rose-400/70'
-                  : t.tipo === 'advertencia' ? 'bg-amber-400/70'
-                  : 'bg-sky-400/70'
-                }`}
-                style={{ animation: 'toast-progress 3.5s linear forwards' }}
-              />
+              <span className="text-[13px] font-medium text-white/90 truncate">{t.mensaje}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* INDICADOR DE PULL-TO-REFRESH */}
       <PullToRefreshIndicator pulling={pulling} distance={distance} threshold={80} />
 
-      {/* HEADER */}
+      {/* Header */}
       <Header 
         gpsEstado={gpsEstado} 
         tabletPos={tabletPos} 
-        onExportarExcel={exportarAExcel}
+        onExportarExcel={() => setModalOpcionesExportacion(true)}
         sincronizando={sincronizando}
         usuarioActivo={usuarioActivo}
         onLogout={async () => {
-          if (usuarioActivo) {
-            await eliminarMiPosicionDB(usuarioActivo.id);
-          }
+          if (usuarioActivo) await eliminarMiPosicionDB(usuarioActivo.id);
           await cancelarRecordatorios();
           setUsuarioActivo(null);
         }}
         onAbrirKpis={() => setModalKpisAbierto(true)}
         onAbrirBusqueda={() => setModalBusquedaGlobal(true)}
         onAbrirRutaDia={() => setModalRutaDia(true)}
-        onAbrirChat={() => {
-          setModalChat(true);
-          setTimeout(() => refrescarMensajesSinLeer(), 500);
-        }}
+        onAbrirChat={() => { setModalChat(true); }}
         mensajesSinLeer={mensajesSinLeer}
         filtroSucursal={filtroSucursal}
         setFiltroSucursal={setFiltroSucursal}
@@ -957,40 +1010,8 @@ export default function App() {
         onForzarSincronizacion={ejecutarSincronizacionOffline}
       />
 
-      {/* DYNAMIC ISLAND */}
-      {obraProxima && !algunModalAbierto && (
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 mb-2.5">
-          <div className="p-3.5 bg-[#000b26]/95 text-white rounded-3xl shadow-lg border border-slate-700/60 backdrop-blur-xl flex items-center justify-between gap-3 animate-in slide-in-from-top duration-200">
-            <div className="min-w-0 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                <MapPin className="w-5 h-5 animate-pulse" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                  📍 Estás en la obra ({obraProxima.distancia}m)
-                </span>
-                <h4 className="text-xs sm:text-sm font-black truncate text-white mt-0.5">{obraProxima.obra.nombre}</h4>
-                <p className="text-[10px] text-slate-400 truncate">{obraProxima.obra.sucursal} • {obraProxima.obra.estatusFase}</p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setVisitaAEditar(null);
-                setObraParaVisita(obraProxima.obra);
-                setModalVisitaAbierto(true);
-              }}
-              className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-105 active:scale-95 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-md shrink-0 transition-all flex items-center gap-1.5">
-              <Zap className="w-4 h-4 fill-slate-950" />
-              <span>Check-in</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* CONTENEDOR MAESTRO */}
-      <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1 space-y-3">
+      {/* Main Tabs */}
+      <main className={`w-full max-w-7xl mx-auto ${tab === 'mapa' ? 'px-2 sm:px-6 lg:px-8 py-0' : 'px-3 sm:px-6 lg:px-8 py-1 space-y-3'}`}>
         {tab === 'pipeline' && (
           <PipelineTab 
             obras={obras}
@@ -1018,24 +1039,15 @@ export default function App() {
               setConfigComercial({ obra, tipo });
               setModalComercialAbierto(true);
             }}
-            onNuevoCliente={() => {
-              setClienteAEditar(null);
-              setModalCliente(true);
-            }}
           />
         )}
 
         {tab === 'clientes' && (
           <ClientesTab 
             clientes={clientes}
-            onNuevoCliente={() => {
-              setClienteAEditar(null);
-              setModalCliente(true);
-            }}
-            onEditarCliente={(c) => { 
-              setClienteAEditar(c); 
-              setModalCliente(true); 
-            }}
+            onNuevoCliente={() => { setClienteAEditar(null); setModalCliente(true); }}
+            onSeleccionarCliente={(c) => setClienteSeleccionado(c)}
+            onEditarCliente={(c) => { setClienteAEditar(c); setModalCliente(true); }}
             onEliminarCliente={(c) => setItemAEliminar({ tipo: 'cliente', data: c })}
             onAbrirRuta={setDestinoRuta}
             esDirector={esDirector}
@@ -1050,6 +1062,8 @@ export default function App() {
             visitas={visitas}
             clientes={clientes}
             onAbrirRuta={setDestinoRuta}
+            onSeleccionarObra={(o) => setObraSeleccionada(o)}
+            onSeleccionarCliente={(c) => setClienteSeleccionado(c)}
             filtroSucursal={filtroSucursal}
             setFiltroSucursal={setFiltroSucursal}
             asesoresEnVivo={asesoresEnVivo}
@@ -1059,28 +1073,51 @@ export default function App() {
         )}
       </main>
 
-      {/* BARRA INFERIOR */}
       <BottomNav tab={tab} setTab={setTab} usuarioActivo={usuarioActivo} />
 
-      {/* MODALES */}
-      <ResumenKpis
-        isOpen={modalKpisAbierto}
-        onClose={() => setModalKpisAbierto(false)}
-        sucursal={filtroSucursal}
-        visitasHoy={visitasHoy}
-        metaDiaria={metaDiaria}
-        porcentajeMeta={porcentajeMeta}
-        totalMonto={totalMontoCotizaciones}
-        totalObras={obras.length}
-        ventasCerradas={ventasCerradasTotal}
-        totalObrasFrias={totalObrasFrias}
-        esDirector={esDirector}
-        visitas={visitas}
-        obras={obras}
-        movimientos={movimientos}
-        onSeleccionarSucursal={(suc) => setFiltroSucursal(suc)}
-      />
+      {/* DIÁLOGO: DESCARGAR EXCEL O DESCARGAR GOOGLE MAPS */}
+      {modalOpcionesExportacion && (
+        <div className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-sm rounded-[28px] p-6 shadow-2xl space-y-4 border border-slate-200 text-center">
+            
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-base font-black text-[#001757]">
+                Descargar Reporte ({filtroSucursal})
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setModalOpcionesExportacion(false)} 
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Elige el formato que deseas descargar a tu dispositivo:
+            </p>
+
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={ejecutarDescargaExcel}
+                className="w-full min-h-[50px] rounded-2xl bg-[#001757] hover:bg-[#00227a] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-98 transition-all">
+                <FileSpreadsheet className="w-4 h-4 text-[#0091FB]" />
+                <span>Descargar Excel Power BI (.xlsx)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={ejecutarDescargaKmlMyMaps}
+                className="w-full min-h-[50px] rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-98 transition-all">
+                <Globe className="w-4 h-4 text-white" />
+                <span>Descargar Capa Google My Maps (.kml)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXPEDIENTE EJECUTIVO DE OBRA */}
       <ModalExpedienteObra
         isOpen={Boolean(obraSeleccionada)}
         onClose={() => setObraSeleccionada(null)}
@@ -1116,6 +1153,34 @@ export default function App() {
         onGuardarMovimientoDirecto={handleGuardarMovimiento}
       />
 
+      {/* EXPEDIENTE EJECUTIVO DE CLIENTE (FICHA DE CONSULTA) */}
+      <ModalExpedienteCliente
+        isOpen={Boolean(clienteSeleccionado)}
+        onClose={() => setClienteSeleccionado(null)}
+        cliente={clienteSeleccionado}
+        obras={obras}
+        movimientos={movimientos}
+        onEditarCliente={(c) => {
+          setClienteAEditar(c);
+          setModalCliente(true);
+        }}
+        onEliminarCliente={(c) => {
+          setItemAEliminar({ tipo: 'cliente', data: c });
+          setClienteSeleccionado(null);
+        }}
+        onAbrirRuta={setDestinoRuta}
+        onSeleccionarObra={(o) => {
+          setClienteSeleccionado(null);
+          setObraSeleccionada(o);
+        }}
+        onNuevaObraParaCliente={(c) => {
+          setClienteSeleccionado(null);
+          setObraAEditar({ clienteId: c.id, sucursal: c.sucursal });
+          setModalObraAbierto(true);
+        }}
+      />
+
+      {/* FORMULARIOS DE ALTA Y EDICIÓN */}
       <ModalObra
         isOpen={modalObraAbierto}
         onClose={() => { setModalObraAbierto(false); setObraAEditar(null); }}
@@ -1202,10 +1267,7 @@ export default function App() {
 
       <ModalChat
         isOpen={modalChat}
-        onClose={() => {
-          setModalChat(false);
-          refrescarMensajesSinLeer();
-        }}
+        onClose={() => setModalChat(false)}
         usuarioActivo={usuarioActivo}
         usuarios={usuarios}
       />
@@ -1217,15 +1279,33 @@ export default function App() {
         clientes={clientes}
         movimientos={movimientos}
         onSeleccionarObra={(o) => setObraSeleccionada(o)}
-        onSeleccionarCliente={(c) => {
-          setTab('clientes');
-          setClienteAEditar(c);
-          setModalCliente(true);
-        }}
+        onSeleccionarCliente={(c) => setClienteSeleccionado(c)}
+      />
+
+      <ResumenKpis
+        isOpen={modalKpisAbierto}
+        onClose={() => setModalKpisAbierto(false)}
+        sucursal={filtroSucursal}
+        visitasHoy={visitas.filter(v => v.fecha && v.fecha.startsWith(new Date().toISOString().slice(0, 10))).length}
+        metaDiaria={5}
+        porcentajeMeta={Math.min(100, Math.round((visitas.filter(v => v.fecha && v.fecha.startsWith(new Date().toISOString().slice(0, 10))).length / 5) * 100))}
+        totalMonto={movimientos.reduce((acc, m) => acc + (Number(m.monto) || 0), 0)}
+        totalObras={obras.length}
+        ventasCerradas={movimientos.filter(m => m.tipo === 'VENTA').length}
+        totalObrasFrias={obras.filter(o => {
+          const vList = visitas.filter(v => v.obraId === o.id).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+          if (!vList.length) return true;
+          return Math.floor((Date.now() - new Date(vList[0].fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24)) > 12;
+        }).length}
+        esDirector={esDirector}
+        visitas={visitas}
+        obras={obras}
+        movimientos={movimientos}
+        onSeleccionarSucursal={(suc) => setFiltroSucursal(suc)}
       />
 
       {itemAEliminar && (
-        <div className="fixed inset-0 z-[110] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200">
             <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
@@ -1240,11 +1320,6 @@ export default function App() {
                 <strong className="text-slate-900 font-black">
                   {itemAEliminar.data.nombre || itemAEliminar.data.nombreCliente}
                 </strong>
-                {itemAEliminar.tipo === 'obra' && (
-                  <span className="block text-[11px] text-rose-600 font-bold mt-1">
-                    ⚠️ Se eliminarán de Supabase sus visitas, ventas, fotos y documentos físicos automáticamente.
-                  </span>
-                )}
               </p>
             </div>
 
@@ -1266,7 +1341,7 @@ export default function App() {
         </div>
       )}
 
-      {/* CONFIRMACIÓN DE SALIDA */}
+      {/* Confirmación de Salida */}
       {modalConfirmarSalida && (
         <div className="fixed inset-0 z-[350] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-sm rounded-[28px] p-6 shadow-2xl space-y-4 border border-slate-200 text-center">

@@ -1,11 +1,12 @@
+// src/components/ModalExpedienteObra.jsx
 import React, { useState } from 'react';
 import { 
-  X, Calendar, Clock, Camera, ShieldCheck, AlertTriangle, Compass, 
+  X, Calendar, Clock, Camera, ShieldCheck, AlertTriangle, 
   DollarSign, FileText, Phone, MessageCircle, Navigation, Plus, 
   FileSpreadsheet, User, Building2, MapPin, Pencil, Trash2,
-  ChevronRight, Link2, Receipt, FileCheck, CheckCircle2, Eye
+  ChevronRight, Link2, Receipt, FileCheck, CheckCircle2, Eye, Info
 } from 'lucide-react';
-import { FASE_COLORS, CAT_FORMA_PAGO } from '../data/constants';
+import { FASE_COLORS, CAT_FORMA_PAGO, ETAPAS_COMERCIALES, CAT_TIPOS_OBRA } from '../data/constants';
 import { abrirGoogleCalendar } from '../lib/calendario';
 
 const formatearMoneda = (val) => {
@@ -40,12 +41,13 @@ export default function ModalExpedienteObra({
   const [tipoComprobanteVenta, setTipoComprobanteVenta] = useState('REMISIÓN');
   const [formaPagoVenta, setFormaPagoVenta] = useState('EFECTIVO');
   
-  // ESTADO PARA ABRIR EL DETALLE COMPLETO DE UNA VISITA
   const [visitaDetalle, setVisitaDetalle] = useState(null);
 
   if (!isOpen || !obra) return null;
 
   const clienteVinculado = clientes.find(c => c.id === obra.clienteId);
+  const tipoObraInfo = CAT_TIPOS_OBRA.find(t => t.id === obra.tipoObra) || CAT_TIPOS_OBRA[0];
+  const etapaInfo = ETAPAS_COMERCIALES.find(e => e.id === obra.etapaComercial) || ETAPAS_COMERCIALES[0];
 
   const visitasObra = visitas
     .filter(v => v.obraId === obra.id)
@@ -66,7 +68,7 @@ export default function ModalExpedienteObra({
     const tel = clienteVinculado.contacto.replace(/\D/g, '');
     const telFinal = tel.length === 10 ? `52${tel}` : tel;
     const resp = clienteVinculado.responsable ? ` ${clienteVinculado.responsable}` : '';
-    const msg = encodeURIComponent(`HOLA${resp}, TE CONTACTO RESPECTO A LA OBRA ${obra.nombre}.`);
+    const msg = encodeURIComponent(`Hola${resp}, te contacto de OBS respecto a la obra ${obra.nombre}.`);
     window.open(`https://wa.me/${telFinal}?text=${msg}`, '_blank');
   };
 
@@ -102,13 +104,10 @@ export default function ModalExpedienteObra({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full sm:max-w-3xl bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
+    // CONTENEDOR CENTRADO EN PANTALLA CON MARGEN PERIMETRAL
+    <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden border border-slate-200 my-auto">
         
-        <div className="pt-2 pb-1 sm:hidden">
-          <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
-        </div>
-
         {/* CABECERA MAESTRA */}
         <div className="p-4 sm:p-5 bg-white border-b border-slate-200 shrink-0 space-y-3">
           <div className="flex items-start justify-between gap-2">
@@ -129,13 +128,21 @@ export default function ModalExpedienteObra({
                 <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black border uppercase ${FASE_COLORS[obra.estatusFase]}`}>
                   {obra.estatusFase}
                 </span>
+
+                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-purple-50 text-purple-900 border border-purple-200">
+                  🎯 {etapaInfo.label}
+                </span>
               </div>
 
-              <h2 className="text-lg sm:text-xl font-black text-[#001757] leading-tight mt-1.5 truncate">
-                {obra.nombre}
-              </h2>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-base sm:text-lg">{tipoObraInfo.icono}</span>
+                <h2 className="text-lg sm:text-xl font-black text-[#001757] leading-tight truncate">
+                  {obra.nombre}
+                </h2>
+              </div>
+
               <p className="text-xs font-semibold text-slate-500 truncate mt-0.5">
-                {obra.sucursal} • {obra.direccion || 'Ubicación satelital fijada'}
+                {obra.sucursal} • {tipoObraInfo.label.split('/')[0]} • {obra.direccion || 'Ubicación satelital fijada'}
               </p>
             </div>
 
@@ -143,7 +150,7 @@ export default function ModalExpedienteObra({
               <button
                 type="button"
                 onClick={() => onEditarObra(obra)}
-                className="w-10 h-10 rounded-2xl bg-blue-50 text-[#0091FB] hover:bg-blue-100 flex items-center justify-center transition-all active:scale-90"
+                className="w-9 h-9 rounded-xl bg-blue-50 text-[#0091FB] hover:bg-blue-100 flex items-center justify-center transition-all active:scale-90"
                 title="Editar Obra">
                 <Pencil className="w-4 h-4" />
               </button>
@@ -151,7 +158,7 @@ export default function ModalExpedienteObra({
               <button
                 type="button"
                 onClick={() => onEliminarObra(obra)}
-                className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition-all active:scale-90"
+                className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition-all active:scale-90"
                 title="Eliminar Obra">
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -159,7 +166,7 @@ export default function ModalExpedienteObra({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-all active:scale-90 ml-1">
+                className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-all active:scale-90 ml-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -170,30 +177,30 @@ export default function ModalExpedienteObra({
             <button
               type="button"
               onClick={() => setSubTab('bitacora')}
-              className={`min-h-[42px] py-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+              className={`min-h-[40px] py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
                 subTab === 'bitacora' ? 'bg-white text-[#001757] shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}>
-              <Camera className="w-4 h-4" />
+              <Camera className="w-3.5 h-3.5" />
               <span>Bitácora ({visitasObra.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSubTab('comercial')}
-              className={`min-h-[42px] py-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+              className={`min-h-[40px] py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
                 subTab === 'comercial' ? 'bg-white text-[#001757] shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}>
-              <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-3.5 h-3.5" />
               <span>Comercial ({movimientosObra.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSubTab('contacto')}
-              className={`min-h-[42px] py-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+              className={`min-h-[40px] py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
                 subTab === 'contacto' ? 'bg-white text-[#001757] shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}>
-              <User className="w-4 h-4" />
+              <User className="w-3.5 h-3.5" />
               <span>Contacto & GPS</span>
             </button>
           </div>
@@ -202,28 +209,28 @@ export default function ModalExpedienteObra({
         {/* CONTENIDO DE PESTAÑAS */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           
-          {/* BITÁCORA EN FORMATO LISTA FLUIDA */}
+          {/* 1. BITÁCORA */}
           {subTab === 'bitacora' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-black text-[#001757]">Historial de Visitas de Campo</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Toca cualquier visita para ver sus fotos y detalles</p>
+                  <p className="text-[11px] text-slate-400 font-medium">Toca cualquier visita para ver sus fotos y notas</p>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => onNuevaVisita(obra)}
-                  className="min-h-[42px] px-4 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-1.5 transition-all">
+                  className="min-h-[38px] px-3.5 bg-[#0091FB] hover:bg-[#007be0] active:scale-95 text-white font-black text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all">
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>+ Check-in</span>
                 </button>
               </div>
 
               {visitasObra.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 space-y-2">
-                  <Camera className="w-9 h-9 text-slate-300 mx-auto" />
-                  <p className="text-xs sm:text-sm font-bold text-slate-700">Sin visitas registradas aún</p>
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <Camera className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold text-slate-700">Sin visitas registradas aún</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -231,23 +238,23 @@ export default function ModalExpedienteObra({
                     <div
                       key={v.id || idx}
                       onClick={() => setVisitaDetalle(v)}
-                      className="p-3.5 bg-slate-50 hover:bg-blue-50/70 border border-slate-200/90 hover:border-[#0091FB] rounded-2xl cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-3 group">
+                      className="p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200/90 hover:border-[#0091FB] rounded-2xl cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-3 group">
                       
                       <div className="min-w-0 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[#001757] shrink-0 font-bold shadow-2xs group-hover:border-[#0091FB]">
-                          <Calendar className="w-5 h-5 text-[#0091FB]" />
+                        <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[#001757] shrink-0 font-bold shadow-2xs group-hover:border-[#0091FB]">
+                          <Calendar className="w-4 h-4 text-[#0091FB]" />
                         </div>
 
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-xs font-black text-slate-900 truncate">
                               {v.fecha}
                             </p>
                             <span className={`px-2 py-0.5 rounded-md text-[9px] font-black border uppercase ${FASE_COLORS[v.estatus]}`}>
                               {v.estatus}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 font-semibold truncate mt-0.5">
+                          <p className="text-[11px] text-slate-500 font-semibold truncate mt-0.5">
                             {v.actividad} • <strong className="text-slate-700">{v.asesorNombre || 'Asesor'}</strong>
                           </p>
                         </div>
@@ -270,20 +277,20 @@ export default function ModalExpedienteObra({
             </div>
           )}
 
-          {/* COMERCIAL */}
+          {/* 2. COMERCIAL */}
           {subTab === 'comercial' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-2xl">
+                <div className="bg-blue-50/80 border border-blue-200 p-3.5 rounded-2xl">
                   <span className="text-[10px] font-black uppercase text-[#001757] tracking-widest block">Cotizado</span>
-                  <p className="text-lg font-black text-[#001757] mt-0.5">{formatearMoneda(totalCotizado)}</p>
-                  <p className="text-xs font-bold text-[#0091FB] mt-0.5">{cotizaciones.length} cotización(es)</p>
+                  <p className="text-base sm:text-lg font-black text-[#001757] mt-0.5">{formatearMoneda(totalCotizado)}</p>
+                  <p className="text-[11px] font-bold text-[#0091FB] mt-0.5">{cotizaciones.length} cotización(es)</p>
                 </div>
 
-                <div className="bg-emerald-50/80 border border-emerald-200 p-4 rounded-2xl">
+                <div className="bg-emerald-50/80 border border-emerald-200 p-3.5 rounded-2xl">
                   <span className="text-[10px] font-black uppercase text-emerald-800 tracking-widest block">Vendido</span>
-                  <p className="text-lg font-black text-emerald-800 mt-0.5">{formatearMoneda(totalVendido)}</p>
-                  <p className="text-xs font-bold text-emerald-600 mt-0.5">{ventas.length} venta(s)</p>
+                  <p className="text-base sm:text-lg font-black text-emerald-800 mt-0.5">{formatearMoneda(totalVendido)}</p>
+                  <p className="text-[11px] font-bold text-emerald-600 mt-0.5">{ventas.length} venta(s)</p>
                 </div>
               </div>
 
@@ -291,7 +298,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => onNuevoMovimiento({ obra, tipo: 'COTIZACION' })}
-                  className="flex-1 min-h-[44px] px-3 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all">
+                  className="flex-1 min-h-[42px] px-3 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all">
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>+ Cotización</span>
                 </button>
@@ -299,19 +306,19 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => onNuevoMovimiento({ obra, tipo: 'VENTA' })}
-                  className="flex-1 min-h-[44px] px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all">
+                  className="flex-1 min-h-[42px] px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all">
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>+ Venta Cerrada</span>
                 </button>
               </div>
 
               {movimientosObra.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 space-y-2">
-                  <FileSpreadsheet className="w-9 h-9 text-slate-300 mx-auto" />
-                  <p className="text-xs sm:text-sm font-bold text-slate-700">Sin movimientos comerciales</p>
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <FileSpreadsheet className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold text-slate-700">Sin cotizaciones ni ventas registradas</p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {movimientosObra.map((mov) => {
                     const esVenta = mov.tipo === 'VENTA';
                     const esFactura = mov.comprobante === 'FACTURA';
@@ -320,7 +327,7 @@ export default function ModalExpedienteObra({
                     return (
                       <div 
                         key={mov.id}
-                        className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
+                        className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
                           esVenta 
                             ? (esFactura ? 'bg-indigo-50/80 border-indigo-200' : 'bg-emerald-50/80 border-emerald-200')
                             : 'bg-white border-slate-200'
@@ -335,16 +342,16 @@ export default function ModalExpedienteObra({
                               {mov.comprobante} {mov.estatus === 'GANADA' ? '(CERRADA)' : ''}
                             </span>
 
-                            <span className="font-mono text-xs sm:text-sm font-bold text-slate-800">
+                            <span className="font-mono text-xs font-bold text-slate-800">
                               {mov.folio}
                             </span>
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-[10px] text-slate-400">
                               {mov.fecha}
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <p className="text-sm sm:text-base font-black text-slate-900">
+                            <p className="text-sm font-black text-slate-900">
                               {formatearMoneda(mov.monto)}
                             </p>
                             {esVenta && mov.formaPago && (
@@ -363,8 +370,8 @@ export default function ModalExpedienteObra({
                                 setCotizacionAConvertir(mov);
                                 setFolioVenta('');
                               }}
-                              className="min-h-[38px] px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1 shadow-sm transition-all">
-                              <CheckCircle2 className="w-4 h-4" />
+                              className="min-h-[36px] px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1 shadow-sm transition-all">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>Cerrar Venta</span>
                             </button>
                           )}
@@ -377,8 +384,8 @@ export default function ModalExpedienteObra({
                                 url: mov.documentoAdjunto.url,
                                 titulo: `${mov.folio} - ${obra.nombre}`
                               })}
-                              className="min-h-[38px] px-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1 active:scale-95">
-                              <FileText className="w-4 h-4 text-[#0091FB]" />
+                              className="min-h-[36px] px-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1 active:scale-95">
+                              <FileText className="w-3.5 h-3.5 text-[#0091FB]" />
                               <span>PDF</span>
                             </button>
                           )}
@@ -392,12 +399,12 @@ export default function ModalExpedienteObra({
             </div>
           )}
 
-          {/* CONTACTO & GPS */}
+          {/* 3. CONTACTO & GPS */}
           {subTab === 'contacto' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+            <div className="space-y-3">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
                     Cliente Vinculado
                   </span>
 
@@ -405,7 +412,7 @@ export default function ModalExpedienteObra({
                     <button
                       type="button"
                       onClick={() => onVincularCliente(obra)}
-                      className="text-xs sm:text-sm font-black text-[#0091FB] hover:underline">
+                      className="text-xs font-black text-[#0091FB] hover:underline">
                       Cambiar cliente
                     </button>
                   )}
@@ -414,9 +421,12 @@ export default function ModalExpedienteObra({
                 {clienteVinculado ? (
                   <div className="space-y-2">
                     <div>
-                      <h4 className="text-base font-black text-[#001757]">{clienteVinculado.nombreCliente}</h4>
+                      <h4 className="text-sm sm:text-base font-black text-[#001757]">{clienteVinculado.nombreCliente}</h4>
                       <p className="text-xs text-slate-600 font-semibold mt-0.5">
                         Encargado: <strong>{clienteVinculado.responsable || 'No asignado'}</strong>
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Especialidad: {clienteVinculado.tipoMercado || 'CLIENTE FINAL'}
                       </p>
                     </div>
 
@@ -425,16 +435,16 @@ export default function ModalExpedienteObra({
                         <>
                           <a
                             href={`tel:${clienteVinculado.contacto.replace(/\D/g, '')}`}
-                            className="min-h-[42px] px-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#001757] font-black text-xs sm:text-sm rounded-xl flex items-center gap-1.5 active:scale-95">
-                            <Phone className="w-4 h-4 text-[#0091FB]" />
+                            className="min-h-[38px] px-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#001757] font-black text-xs rounded-xl flex items-center gap-1.5 active:scale-95">
+                            <Phone className="w-3.5 h-3.5 text-[#0091FB]" />
                             <span>Llamar</span>
                           </a>
 
                           <button
                             type="button"
                             onClick={enviarWhatsApp}
-                            className="min-h-[42px] px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-black text-xs sm:text-sm rounded-xl flex items-center gap-1.5 active:scale-95">
-                            <MessageCircle className="w-4 h-4 text-emerald-600" />
+                            className="min-h-[38px] px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-black text-xs rounded-xl flex items-center gap-1.5 active:scale-95">
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                             <span>WhatsApp</span>
                           </button>
                         </>
@@ -442,12 +452,12 @@ export default function ModalExpedienteObra({
                     </div>
                   </div>
                 ) : (
-                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-center space-y-2">
-                    <p className="text-xs sm:text-sm font-bold text-amber-900">Sin cliente asignado</p>
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-center space-y-2">
+                    <p className="text-xs font-bold text-amber-900">Sin cliente asignado</p>
                     <button
                       type="button"
                       onClick={() => onVincularCliente(obra)}
-                      className="min-h-[42px] px-4 bg-amber-600 text-white font-black text-xs rounded-xl inline-flex items-center gap-1.5 active:scale-95">
+                      className="min-h-[38px] px-4 bg-amber-600 text-white font-black text-xs rounded-xl inline-flex items-center gap-1.5 active:scale-95">
                       <Link2 className="w-4 h-4" />
                       <span>Vincular Cliente</span>
                     </button>
@@ -456,12 +466,13 @@ export default function ModalExpedienteObra({
               </div>
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Ubicación GPS</span>
-                <p className="text-xs sm:text-sm font-semibold text-slate-800">{obra.direccion || 'Ubicación fijada en mapa'}</p>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Ubicación GPS</span>
+                <p className="text-xs font-semibold text-slate-800">{obra.direccion || 'Ubicación fijada en mapa'}</p>
+                
                 <button
                   type="button"
                   onClick={() => onAbrirRuta({ nombre: obra.nombre, direccion: obra.direccion, lat: obra.lat, lng: obra.lng })}
-                  className="w-full min-h-[48px] bg-[#001757] text-white font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-98 shadow-sm">
+                  className="w-full min-h-[44px] bg-[#001757] text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-98 shadow-sm">
                   <Navigation className="w-4 h-4 text-[#0091FB]" />
                   <span>Iniciar Ruta GPS (Waze / Google Maps)</span>
                 </button>
@@ -474,15 +485,15 @@ export default function ModalExpedienteObra({
                     manana.setHours(9, 0, 0, 0);
                     abrirGoogleCalendar({
                       titulo: `Visita a obra: ${obra.nombre}`,
-                      descripcion: `Supervisión técnica - ${obra.sucursal}\nFase actual: ${obra.estatusFase}`,
+                      descripcion: `Supervisión técnica - ${obra.sucursal}\nUso: ${tipoObraInfo.label}\nEtapa: ${obra.etapaComercial}`,
                       ubicacion: obra.direccion || `${obra.lat}, ${obra.lng}`,
                       fechaInicio: manana,
                       duracionHoras: 1
                     });
                   }}
-                  className="w-full min-h-[48px] bg-white border-2 border-[#001757] text-[#001757] font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-98 shadow-sm mt-2">
+                  className="w-full min-h-[44px] bg-white border border-[#001757] text-[#001757] font-black text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-98 shadow-2xs mt-2">
                   <Calendar className="w-4 h-4 text-[#0091FB]" />
-                  <span>📅 Agendar visita en Google Calendar</span>
+                  <span>📅 Agendar en Google Calendar</span>
                 </button>
               </div>
             </div>
@@ -491,21 +502,21 @@ export default function ModalExpedienteObra({
         </div>
 
         {/* PIE DE PÁGINA */}
-        <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
+        <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => onEditarObra(obra)}
-              className="min-h-[44px] px-4 rounded-xl bg-slate-200 text-slate-800 font-black text-xs sm:text-sm flex items-center gap-1.5 active:scale-95">
-              <Pencil className="w-4 h-4 text-[#0091FB]" />
+              className="min-h-[42px] px-3.5 rounded-xl bg-slate-200 text-slate-800 font-black text-xs flex items-center gap-1.5 active:scale-95">
+              <Pencil className="w-3.5 h-3.5 text-[#0091FB]" />
               <span>Editar</span>
             </button>
 
             <button
               type="button"
               onClick={() => onEliminarObra(obra)}
-              className="min-h-[44px] px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-black text-xs sm:text-sm flex items-center gap-1.5 active:scale-95">
-              <Trash2 className="w-4 h-4 text-rose-600" />
+              className="min-h-[42px] px-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-black text-xs flex items-center gap-1.5 active:scale-95">
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
               <span>Eliminar</span>
             </button>
           </div>
@@ -513,21 +524,18 @@ export default function ModalExpedienteObra({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[44px] px-6 rounded-xl bg-[#001757] text-white font-black text-xs sm:text-sm shadow-md active:scale-95">
+            className="min-h-[42px] px-6 rounded-xl bg-[#001757] text-white font-black text-xs shadow-md active:scale-95">
             Cerrar
           </button>
         </div>
 
       </div>
 
-      {/* =========================================================================
-          SUB-MODAL: DETALLE COMPLETO DE VISITA (CON EDITAR Y BORRAR INDIVIDUAL)
-         ========================================================================= */}
+      {/* DETALLE COMPLETO DE VISITA (SUB-MODAL TAMBIÉN CENTRADO) */}
       {visitaDetalle && (
-        <div className="fixed inset-0 z-[95] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[110] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] overflow-y-auto my-auto">
             
-            {/* Cabecera del Detalle */}
             <div className="flex items-start justify-between pb-3 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2">
@@ -545,12 +553,11 @@ export default function ModalExpedienteObra({
               <button 
                 type="button"
                 onClick={() => setVisitaDetalle(null)} 
-                className="w-9 h-9 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 active:scale-90">
-                <X className="w-5 h-5" />
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Metadatos y Auditoría */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <span className="text-[10px] font-black uppercase text-slate-400 block">Asesor a Cargo</span>
@@ -565,15 +572,13 @@ export default function ModalExpedienteObra({
               </div>
             </div>
 
-            {/* Observaciones */}
             <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Notas y Acuerdos de Campo</label>
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 leading-relaxed">
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Notas de Campo</label>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-800 leading-relaxed">
                 {visitaDetalle.observaciones ? `"${visitaDetalle.observaciones}"` : 'Sin observaciones registradas.'}
               </div>
             </div>
 
-            {/* Galería de Fotos */}
             {visitaDetalle.fotos && visitaDetalle.fotos.length > 0 && (
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase text-slate-400 tracking-wider">
@@ -598,9 +603,7 @@ export default function ModalExpedienteObra({
               </div>
             )}
 
-            {/* BOTONES DE ACCIÓN: EDITAR Y BORRAR EN SUPABASE */}
             <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
-              
               <button
                 type="button"
                 onClick={() => {
@@ -608,40 +611,39 @@ export default function ModalExpedienteObra({
                   setVisitaDetalle(null);
                   onEditarVisita(target);
                 }}
-                className="min-h-[44px] px-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#001757] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all">
-                <Pencil className="w-4 h-4 text-[#0091FB]" />
+                className="min-h-[42px] px-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#001757] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all">
+                <Pencil className="w-3.5 h-3.5 text-[#0091FB]" />
                 <span>Editar Visita</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`¿Eliminar la visita del ${visitaDetalle.fecha} de forma permanente en Supabase?`)) {
+                  if (confirm(`¿Eliminar la visita del ${visitaDetalle.fecha}?`)) {
                     onEliminarVisita(visitaDetalle.id);
                     setVisitaDetalle(null);
                   }
                 }}
-                className="min-h-[44px] px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all">
-                <Trash2 className="w-4 h-4 text-rose-600" />
+                className="min-h-[42px] px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all">
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
                 <span>Borrar Visita</span>
               </button>
-
             </div>
 
           </div>
         </div>
       )}
 
-      {/* SUB-MODAL RÁPIDO: CONVERTIR COTIZACIÓN A VENTA */}
+      {/* SUB-MODAL DE CIERRE DE VENTA (TAMBIÉN CENTRADO) */}
       {cotizacionAConvertir && (
-        <div className="fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[110] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-3.5 border border-slate-200 animate-in fade-in duration-150 my-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                 <h4 className="text-sm font-black text-[#001757]">Cerrar Venta</h4>
               </div>
-              <button onClick={() => setCotizacionAConvertir(null)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+              <button onClick={() => setCotizacionAConvertir(null)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -655,7 +657,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => setTipoComprobanteVenta('REMISIÓN')}
-                  className={`min-h-[38px] py-1.5 rounded-lg font-black text-xs ${
+                  className={`min-h-[36px] py-1 rounded-lg font-black text-xs ${
                     tipoComprobanteVenta === 'REMISIÓN' ? 'bg-emerald-600 text-white' : 'text-slate-600'
                   }`}>
                   Remisión
@@ -663,7 +665,7 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => setTipoComprobanteVenta('FACTURA')}
-                  className={`min-h-[38px] py-1.5 rounded-lg font-black text-xs ${
+                  className={`min-h-[36px] py-1 rounded-lg font-black text-xs ${
                     tipoComprobanteVenta === 'FACTURA' ? 'bg-indigo-600 text-white' : 'text-slate-600'
                   }`}>
                   Factura
@@ -677,7 +679,7 @@ export default function ModalExpedienteObra({
                   value={folioVenta}
                   onChange={(e) => setFolioVenta(e.target.value)}
                   placeholder={tipoComprobanteVenta === 'REMISIÓN' ? 'REM-501' : 'FAC-809'}
-                  className="w-full h-11 px-3 rounded-xl border border-slate-300 font-bold text-slate-900 outline-none focus:border-[#0091FB]"
+                  className="w-full h-10 px-3 rounded-xl border border-slate-300 font-bold text-slate-900 outline-none focus:border-[#0091FB]"
                 />
               </div>
 
@@ -686,7 +688,7 @@ export default function ModalExpedienteObra({
                 <select
                   value={formaPagoVenta}
                   onChange={(e) => setFormaPagoVenta(e.target.value)}
-                  className="w-full h-11 px-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 outline-none">
+                  className="w-full h-10 px-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 outline-none">
                   {CAT_FORMA_PAGO.map(fp => <option key={fp} value={fp}>{fp}</option>)}
                 </select>
               </div>
@@ -695,12 +697,12 @@ export default function ModalExpedienteObra({
                 <button
                   type="button"
                   onClick={() => setCotizacionAConvertir(null)}
-                  className="w-full min-h-[44px] py-2.5 rounded-xl border border-slate-300 font-bold text-slate-600">
+                  className="w-full min-h-[42px] py-2 rounded-xl border border-slate-300 font-bold text-slate-600">
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="w-full min-h-[44px] py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md">
+                  className="w-full min-h-[42px] py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md">
                   Confirmar Venta
                 </button>
               </div>

@@ -1,7 +1,7 @@
 // src/components/ModalCliente.jsx
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Check, Phone, Mail, Building2, User } from 'lucide-react';
-import { SUCURSALES, CAT_TIPO_CLIENTE } from '../data/constants';
+import { SUCURSALES, CAT_TIPO_CLIENTE, CAT_PERFIL_CLIENTE } from '../data/constants';
 
 export default function ModalCliente({ 
   isOpen, 
@@ -17,8 +17,8 @@ export default function ModalCliente({
     sucursal: 'ALTOZANO',
     nombreCliente: '',
     tipoCliente: 'PROSPECTO',
-    tipoMercado: '',
-    responsable: '', // SIEMPRE EN BLANCO
+    tipoMercado: CAT_PERFIL_CLIENTE[0],
+    responsable: '',
     contacto: '',
     correo: '',
     idRedAzul: '',
@@ -27,7 +27,6 @@ export default function ModalCliente({
     lng: null
   });
 
-  // Inicialización limpia: Responsable SIEMPRE en blanco para nuevo cliente
   useEffect(() => {
     if (!isOpen) return;
 
@@ -35,7 +34,7 @@ export default function ModalCliente({
       setForm({
         ...clienteAEditar,
         tipoCliente: clienteAEditar.tipoCliente || 'PROSPECTO',
-        tipoMercado: clienteAEditar.tipoMercado || '',
+        tipoMercado: clienteAEditar.tipoMercado || CAT_PERFIL_CLIENTE[0],
         responsable: clienteAEditar.responsable || '',
         contacto: clienteAEditar.contacto || '',
         correo: clienteAEditar.correo || '',
@@ -50,8 +49,8 @@ export default function ModalCliente({
         sucursal: sucursalDefault,
         nombreCliente: '',
         tipoCliente: 'PROSPECTO',
-        tipoMercado: '',
-        responsable: '', // CAMPO EN BLANCO PARA NUEVO CLIENTE
+        tipoMercado: CAT_PERFIL_CLIENTE[0],
+        responsable: '',
         contacto: '',
         correo: '',
         idRedAzul: '',
@@ -79,8 +78,9 @@ export default function ModalCliente({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+    // CONTENEDOR 100% CENTRADO CON MARGEN PERIMETRAL
+    <div className="fixed inset-0 z-[110] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden border border-slate-200 my-auto">
         
         {/* Cabecera */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
@@ -94,7 +94,7 @@ export default function ModalCliente({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-              {clienteAEditar ? 'Modificando datos del cliente' : 'Catálogo maestro de constructores y clientes'}
+              {clienteAEditar ? 'Modificando datos del cliente' : 'Catálogo maestro de constructores y especialistas OBS'}
             </p>
           </div>
 
@@ -145,10 +145,28 @@ export default function ModalCliente({
             />
           </div>
 
-          {/* Tipo de Cliente */}
+          {/* Selector de Oficio / Especialidad */}
+          <div className="p-3 bg-blue-50/40 rounded-2xl border border-blue-100 space-y-1">
+            <label className="block font-black text-[#001757] text-[11px] uppercase tracking-wider">
+              Oficio / Especialidad del Cliente *
+            </label>
+            <select
+              value={form.tipoMercado}
+              onChange={(e) => setForm(prev => ({ ...prev, tipoMercado: e.target.value }))}
+              className="w-full h-11 px-3 rounded-xl border border-blue-300 bg-white text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-[#0091FB]/20">
+              {CAT_PERFIL_CLIENTE.map(perfil => (
+                <option key={perfil} value={perfil}>
+                  {perfil}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-400 font-medium">Clasificación clave para reportes segmentados en Power BI.</p>
+          </div>
+
+          {/* Clasificación Comercial */}
           <div className="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-1.5">
             <label className="block font-black text-slate-700 text-[11px] uppercase tracking-wider">
-              Clasificación de Cliente *
+              Estatus del Cliente *
             </label>
             <div className="grid grid-cols-4 gap-1.5">
               {CAT_TIPO_CLIENTE.map(tc => (
@@ -167,7 +185,7 @@ export default function ModalCliente({
             </div>
           </div>
 
-          {/* Encargado / Responsable (EN BLANCO) y Teléfono */}
+          {/* Encargado y Teléfono */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block font-bold text-slate-800 mb-1">Encargado / Contacto *</label>
@@ -192,32 +210,19 @@ export default function ModalCliente({
             </div>
           </div>
 
-          {/* Correo y Mercado */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block font-bold text-slate-800 mb-1">Correo Electrónico</label>
-              <input 
-                type="email"
-                value={form.correo}
-                onChange={(e) => setForm(prev => ({ ...prev, correo: e.target.value }))}
-                placeholder="contacto@empresa.com"
-                className="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 outline-none focus:border-[#0091FB]"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-800 mb-1">Tipo de Mercado</label>
-              <input 
-                type="text"
-                value={form.tipoMercado}
-                onChange={(e) => setForm(prev => ({ ...prev, tipoMercado: e.target.value }))}
-                placeholder="Residencial, Industrial..."
-                className="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 outline-none focus:border-[#0091FB]"
-              />
-            </div>
+          {/* Correo Electrónico */}
+          <div>
+            <label className="block font-bold text-slate-800 mb-1">Correo Electrónico</label>
+            <input 
+              type="email"
+              value={form.correo}
+              onChange={(e) => setForm(prev => ({ ...prev, correo: e.target.value }))}
+              placeholder="contacto@empresa.com"
+              className="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 outline-none focus:border-[#0091FB]"
+            />
           </div>
 
-          {/* Geolocalización y Dirección */}
+          {/* Ubicación y Dirección */}
           <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <label className="font-bold text-slate-900 text-xs">Ubicación y Dirección Fiscal/Oficina *</label>

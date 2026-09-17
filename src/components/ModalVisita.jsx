@@ -1,12 +1,12 @@
+// src/components/ModalVisita.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Camera, Image as ImageIcon, Loader2, 
-  Mic, MicOff, Check, WifiOff, Pencil
+  Mic, MicOff, Check, WifiOff, Info
 } from 'lucide-react';
-import { FASES_OBRA, CAT_ACTIVIDAD_VISITA } from '../data/constants';
+import { FASES_OBRA, CAT_ACTIVIDAD_VISITA, ETAPAS_COMERCIALES } from '../data/constants';
 import { subirArchivoSupabase } from '../lib/supabase';
 import { iniciarDictado } from '../lib/dictado';
-import { useSwipeToClose } from '../hooks/useSwipeToClose';
 
 function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
@@ -42,6 +42,7 @@ export default function ModalVisita({
   visitaAEditar = null
 }) {
   const [fase, setFase] = useState('CIMENTACIÓN');
+  const [etapaComercial, setEtapaComercial] = useState('PROSPECTO');
   const [actividad, setActividad] = useState('SUPERVISIÓN TÉCNICA');
   const [fecha, setFecha] = useState(obtenerFechaHoraActual());
   const [observaciones, setObservaciones] = useState('');
@@ -51,19 +52,19 @@ export default function ModalVisita({
 
   const dictadoRef = useRef(null);
 
-  const { translateY, handlers: swipeHandlers } = useSwipeToClose(onClose, { threshold: 120 });
-
   useEffect(() => {
     if (!isOpen) return;
 
     if (visitaAEditar) {
       setFase(visitaAEditar.estatus || 'CIMENTACIÓN');
+      setEtapaComercial(visitaAEditar.etapaComercial || 'PROSPECTO');
       setActividad(visitaAEditar.actividad || 'SUPERVISIÓN TÉCNICA');
       setFecha(visitaAEditar.fecha ? visitaAEditar.fecha.replace(' ', 'T') : obtenerFechaHoraActual());
       setObservaciones(visitaAEditar.observaciones || '');
       setFotos(visitaAEditar.fotos || []);
     } else if (obra) {
       setFase(obra.estatusFase || 'CIMENTACIÓN');
+      setEtapaComercial(obra.etapaComercial || 'PROSPECTO');
       setFecha(obtenerFechaHoraActual());
       setObservaciones('');
       setFotos([]);
@@ -78,6 +79,22 @@ export default function ModalVisita({
   }, [obra, isOpen, visitaAEditar]);
 
   if (!isOpen || (!obra && !visitaAEditar)) return null;
+
+  const etapaObj = ETAPAS_COMERCIALES.find(e => e.id === etapaComercial) || ETAPAS_COMERCIALES[0];
+
+  const handleSeleccionarEtapa = (nuevaEtapaId) => {
+    setEtapaComercial(nuevaEtapaId);
+    const etapaEncontrada = ETAPAS_COMERCIALES.find(e => e.id === nuevaEtapaId);
+
+    if (etapaEncontrada && etapaEncontrada.prefijo) {
+      setObservaciones(prev => {
+        if (!prev.includes(etapaEncontrada.prefijo)) {
+          return `${etapaEncontrada.prefijo}${prev}`.trim();
+        }
+        return prev;
+      });
+    }
+  };
 
   const toggleDictadoVoz = async () => {
     if (grabandoVoz) {
@@ -94,11 +111,7 @@ export default function ModalVisita({
       onTexto: (texto) => {
         setObservaciones(prev => prev ? `${prev.trim()} ${texto}` : texto);
       },
-      onError: (err) => {
-        console.warn('Error dictado:', err);
-        if (err === 'sin_soporte') {
-          alert('El dictado por voz no está disponible en este dispositivo');
-        }
+      onError: () => {
         setGrabandoVoz(false);
         dictadoRef.current = null;
       },
@@ -156,6 +169,7 @@ export default function ModalVisita({
       fecha: fecha.replace('T', ' '),
       asesorNombre: visitaAEditar ? visitaAEditar.asesorNombre : (usuarioActivo?.nombre || 'Asesor'),
       estatus: fase,
+      etapaComercial,
       actividad,
       observaciones,
       fotos,
@@ -168,23 +182,9 @@ export default function ModalVisita({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div 
-        className="w-full sm:max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200"
-        style={{ 
-          transform: `translateY(${translateY}px)`,
-          transition: translateY === 0 ? 'transform 0.25s ease-out' : 'none'
-        }}
-      >
+    <div className="fixed inset-0 z-[110] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden border border-slate-200 my-auto">
         
-        <div 
-          {...swipeHandlers}
-          className="pt-2 pb-1 cursor-grab active:cursor-grabbing"
-          style={{ touchAction: 'none' }}
-        >
-          <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
-        </div>
-
         {/* Cabecera */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="min-w-0 pr-2">
@@ -212,17 +212,53 @@ export default function ModalVisita({
 
         <form id="form-visita" onSubmit={handleSubmit} className="overflow-y-auto p-4 space-y-4 text-xs">
           
+          {/* EMBUDO COMERCIAL OBS ACTUALIZADO EN SITIO */}
+          <div className="p-3 bg-gradient-to-br from-blue-50/70 to-indigo-50/40 rounded-2xl border border-blue-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="font-black text-[#001757] text-[11px] uppercase tracking-wider flex items-center gap-1">
+                <span>🎯 Etapa Comercial OBS de esta Visita *</span>
+              </label>
+              <span className="text-[10px] font-black bg-[#001757] text-white px-2 py-0.5 rounded-md">
+                {etapaObj.label}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+              {ETAPAS_COMERCIALES.map(etapa => (
+                <button
+                  key={etapa.id}
+                  type="button"
+                  onClick={() => handleSeleccionarEtapa(etapa.id)}
+                  className={`py-2 px-1 rounded-xl text-[11px] font-black border transition-all truncate text-center ${
+                    etapaComercial === etapa.id
+                      ? 'bg-[#001757] text-white border-[#001757] shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  {etapa.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-white p-2.5 rounded-xl border border-blue-200 flex items-start gap-2 shadow-2xs">
+              <Info className="w-4 h-4 text-[#0091FB] shrink-0 mt-0.5" />
+              <p className="text-[11px] text-slate-700 leading-snug font-medium">
+                <strong className="text-[#001757]">{etapaObj.label}:</strong> {etapaObj.desc}
+              </p>
+            </div>
+          </div>
+
+          {/* FASE FÍSICA DETECTADA EN CAMPO */}
           <div>
-            <label className="block font-black text-slate-800 text-xs mb-2">Fase Constructiva Actual *</label>
+            <label className="block font-black text-slate-800 text-xs mb-2">Fase Física de la Obra en Sitio *</label>
             <div className="grid grid-cols-3 gap-1.5">
               {FASES_OBRA.map(f => (
                 <button
                   key={f}
                   type="button"
                   onClick={() => setFase(f)}
-                  className={`min-h-[44px] px-2 rounded-xl text-xs font-black border transition-all truncate active:scale-95 ${
+                  className={`min-h-[42px] px-2 rounded-xl text-xs font-black border transition-all truncate active:scale-95 ${
                     fase === f
-                      ? 'bg-[#001757] text-white border-[#001757] shadow-sm'
+                      ? 'bg-[#0091FB] text-white border-[#0091FB] shadow-sm'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}>
                   {f}
@@ -231,8 +267,9 @@ export default function ModalVisita({
             </div>
           </div>
 
+          {/* Actividad */}
           <div>
-            <label className="block font-black text-slate-800 text-xs mb-1.5">Tipo de Actividad en Sitio</label>
+            <label className="block font-black text-slate-800 text-xs mb-1.5">Actividad Realizada</label>
             <select
               value={actividad}
               onChange={(e) => setActividad(e.target.value)}
@@ -241,8 +278,9 @@ export default function ModalVisita({
             </select>
           </div>
 
+          {/* Fecha y Hora */}
           <div>
-            <label className="block font-black text-slate-800 text-xs mb-1.5">Fecha y Hora de la Visita</label>
+            <label className="block font-black text-slate-800 text-xs mb-1.5">Fecha y Hora</label>
             <input 
               type="datetime-local"
               value={fecha}
@@ -256,7 +294,7 @@ export default function ModalVisita({
             <div className="flex items-center justify-between">
               <div>
                 <label className="font-black text-slate-900 text-xs sm:text-sm">Evidencia Fotográfica ({fotos.length})</label>
-                <p className="text-[11px] text-slate-500">Fotografía del avance real</p>
+                <p className="text-[11px] text-slate-500">Imágenes de campo</p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -299,7 +337,7 @@ export default function ModalVisita({
           {/* Notas con Dictado por Voz */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="font-black text-slate-800 text-xs">Notas de Supervisión</label>
+              <label className="font-black text-slate-800 text-xs">Notas y Acuerdos de Campo</label>
               <button
                 type="button"
                 onClick={toggleDictadoVoz}
@@ -317,14 +355,13 @@ export default function ModalVisita({
               rows="3"
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
-              placeholder="Detalla acuerdos, materiales recibidos o incidencias..."
+              placeholder="Escribe o dicta detalles técnicos, acuerdos o el motivo de la etapa comercial..."
               className="w-full p-3 rounded-2xl border border-slate-300 text-xs sm:text-sm font-medium outline-none focus:ring-2 focus:ring-[#0091FB] leading-relaxed"
             />
           </div>
 
         </form>
 
-        {/* Botón Guardar */}
         <div className="p-4 bg-white border-t border-slate-100 shrink-0">
           <button
             type="submit"

@@ -1,4 +1,3 @@
-// src/components/ClientesTab.jsx
 import React, { useState } from 'react';
 import { 
   UserPlus, Phone, MapPin, Navigation, Pencil, Trash2, 
@@ -8,6 +7,7 @@ import {
 export default function ClientesTab({ 
   clientes = [], 
   onNuevoCliente, 
+  onSeleccionarCliente,
   onEditarCliente, 
   onEliminarCliente, 
   onAbrirRuta,
@@ -46,10 +46,9 @@ export default function ClientesTab({
   return (
     <div className="space-y-3.5 pb-28">
       
-      {/* Buscador con Lupa Centrada Matemáticamente y Alta Rápida */}
+      {/* Buscador y Botón de Alta Rápida SIEMPRE VISIBLE */}
       <div className="flex items-center justify-between gap-2.5">
         <div className="relative flex-1">
-          {/* Contenedor que centra la lupa en el medio vertical exacto */}
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <Search className="w-4 h-4 text-slate-400" />
           </div>
@@ -59,19 +58,18 @@ export default function ClientesTab({
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar cliente, responsable o teléfono..."
-            className="w-full h-11 pl-10 pr-3 rounded-2xl border border-slate-300/80 bg-white text-xs sm:text-sm font-semibold text-slate-900 outline-none focus:border-[#0091FB] focus:ring-2 focus:ring-[#0091FB]/15 shadow-sm transition-all"
+            className="w-full h-11 pl-10 pr-3 rounded-2xl border border-slate-300/80 bg-white text-xs sm:text-sm font-semibold text-slate-900 outline-none focus:border-[#0091FB] focus:ring-2 focus:ring-[#0091FB]/15 shadow-2xs transition-all"
           />
         </div>
 
-        {!esDirector && (
-          <button
-            type="button"
-            onClick={onNuevoCliente}
-            className="min-h-[44px] px-4 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-black shadow-sm flex items-center gap-1.5 shrink-0 transition-all">
-            <UserPlus className="w-4 h-4 stroke-[2.5]" />
-            <span>+ Cliente</span>
-          </button>
-        )}
+        {/* BOTÓN + CLIENTE VISIBLE PARA TODOS */}
+        <button
+          type="button"
+          onClick={onNuevoCliente}
+          className="min-h-[44px] px-4 bg-[#001757] hover:bg-[#00227a] active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-black shadow-sm flex items-center gap-1.5 shrink-0 transition-all">
+          <UserPlus className="w-4 h-4 stroke-[2.5]" />
+          <span>+ Cliente</span>
+        </button>
       </div>
 
       <div className="flex items-center justify-between px-1 text-[11px] sm:text-xs font-extrabold text-slate-500">
@@ -83,7 +81,7 @@ export default function ClientesTab({
         )}
       </div>
 
-      {/* Grid de Clientes Adaptativo */}
+      {/* Grid de Clientes */}
       {clientesFiltrados.length === 0 ? (
         <div className="bg-white p-10 rounded-3xl border border-slate-200/80 text-center space-y-2.5 shadow-sm">
           <Building2 className="w-10 h-10 text-slate-300 mx-auto" />
@@ -103,10 +101,10 @@ export default function ClientesTab({
             return (
               <div 
                 key={cli.id} 
-                onClick={() => onEditarCliente(cli)}
+                onClick={() => onSeleccionarCliente ? onSeleccionarCliente(cli) : onEditarCliente(cli)}
                 className="w-full bg-white hover:border-[#0091FB] active:scale-[0.99] cursor-pointer rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md transition-all duration-150 space-y-2.5">
                 
-                {/* Línea 1: ID + Nombre + Badges */}
+                {/* ID + Nombre + Badges */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex items-center gap-2">
                     <span className="font-mono font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-[10px] shrink-0 border border-slate-200">
@@ -127,7 +125,7 @@ export default function ClientesTab({
                   </div>
                 </div>
 
-                {/* Línea 2: Responsable y Dirección */}
+                {/* Responsable y Dirección */}
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                   <p className="truncate font-bold flex items-center gap-1.5 text-xs text-slate-700">
                     <User className="w-3.5 h-3.5 text-[#0091FB] shrink-0" />
@@ -140,7 +138,7 @@ export default function ClientesTab({
                   </p>
                 </div>
 
-                {/* Línea 3: Acciones */}
+                {/* Acciones Rápidas */}
                 <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
                     {tieneTelefono ? (

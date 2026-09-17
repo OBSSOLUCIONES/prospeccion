@@ -1,7 +1,7 @@
 // src/components/ModalObra.jsx
 import React, { useState, useEffect } from 'react';
-import { X, MapPin, Check, Building2, User, Compass } from 'lucide-react';
-import { SUCURSALES, FASES_OBRA, CAT_TIPO_DESARROLLO } from '../data/constants';
+import { X, MapPin, Check, Building2, Info } from 'lucide-react';
+import { SUCURSALES, FASES_OBRA, CAT_TIPO_DESARROLLO, ETAPAS_COMERCIALES, CAT_TIPOS_OBRA } from '../data/constants';
 
 export default function ModalObra({ 
   isOpen, 
@@ -18,22 +18,25 @@ export default function ModalObra({
     sucursal: 'ALTOZANO',
     nombre: '',
     clienteId: '',
+    tipoObra: 'CASA_HABITACION',
     tipoDesarrollo: 'OBRA NUEVA',
     estatusFase: 'PRELIMINARES',
+    etapaComercial: 'PROSPECTO',
     estadoObra: 'ACTIVA',
     direccion: '',
     lat: null,
     lng: null
   });
 
-  // CORRECCIÓN CLAVE: Solo se reinicia al abrir/cerrar o cambiar de obra
-  // tabletPos YA NO está en las dependencias para evitar que el GPS borre lo que escribes
   useEffect(() => {
     if (!isOpen) return;
 
     if (obraAEditar) {
       setForm({
         ...obraAEditar,
+        tipoObra: obraAEditar.tipoObra || 'CASA_HABITACION',
+        estatusFase: obraAEditar.estatusFase || 'PRELIMINARES',
+        etapaComercial: obraAEditar.etapaComercial || 'PROSPECTO',
         estadoObra: obraAEditar.estadoObra || 'ACTIVA',
         clienteId: obraAEditar.clienteId || ''
       });
@@ -46,8 +49,10 @@ export default function ModalObra({
         sucursal: sucursalDefault,
         nombre: '',
         clienteId: '',
+        tipoObra: 'CASA_HABITACION',
         tipoDesarrollo: 'OBRA NUEVA',
         estatusFase: 'PRELIMINARES',
+        etapaComercial: 'PROSPECTO',
         estadoObra: 'ACTIVA',
         direccion: '',
         lat: tabletPos?.lat || 19.6642,
@@ -62,6 +67,9 @@ export default function ModalObra({
   const existentes = obras.filter(o => o.id && o.id.startsWith(`OBR-${sucursalObj.codigo}`)).length;
   const idMostrado = obraAEditar ? obraAEditar.id : `OBR-${sucursalObj.codigo}${String(existentes + 1).padStart(2, '0')}`;
 
+  const etapaSeleccionadaObj = ETAPAS_COMERCIALES.find(e => e.id === form.etapaComercial) || ETAPAS_COMERCIALES[0];
+  const tipoObraObj = CAT_TIPOS_OBRA.find(t => t.id === form.tipoObra) || CAT_TIPOS_OBRA[0];
+
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave({
@@ -73,10 +81,10 @@ export default function ModalObra({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-[110] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden border border-slate-200 my-auto">
         
-        {/* CABECERA HOMOLOGADA */}
+        {/* Cabecera */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="min-w-0 pr-2">
             <div className="flex items-center gap-2">
@@ -88,7 +96,7 @@ export default function ModalObra({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-              {obraAEditar ? 'Modificando expediente técnico' : 'Registro de proyecto físico en campo'}
+              Expediente territorial y comercial para Power BI y Google Maps
             </p>
           </div>
 
@@ -102,7 +110,7 @@ export default function ModalObra({
 
         <form id="form-obra" onSubmit={handleSubmit} className="overflow-y-auto p-4 space-y-3.5 text-xs">
           
-          {/* BLOQUE 1: SUCURSAL Y TIPO DE DESARROLLO */}
+          {/* Sucursal y Tipo de Desarrollo */}
           <div className="grid grid-cols-2 gap-2 bg-blue-50/60 p-3 rounded-2xl border border-blue-100">
             <div>
               <label className="block font-black text-[#001757] mb-1">Sucursal *</label>
@@ -126,7 +134,25 @@ export default function ModalObra({
             </div>
           </div>
 
-          {/* BLOQUE 2: NOMBRE PRINCIPAL */}
+          {/* TIPOLOGÍA / VOCACIÓN DE LA OBRA (ICONOS GOOGLE MY MAPS) */}
+          <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-1">
+            <label className="block font-black text-emerald-950 text-[11px] uppercase tracking-wider">
+              Tipología Arquitectónica / Uso de la Obra *
+            </label>
+            <select
+              value={form.tipoObra}
+              onChange={(e) => setForm(prev => ({ ...prev, tipoObra: e.target.value }))}
+              className="w-full h-11 px-3 rounded-xl border border-emerald-300 bg-white text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/20">
+              {CAT_TIPOS_OBRA.map(tipo => (
+                <option key={tipo.id} value={tipo.id}>
+                  {tipo.icono} {tipo.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-emerald-700 font-medium">Define el icono visual en el mapa satelital y en Google My Maps.</p>
+          </div>
+
+          {/* Nombre de la Obra */}
           <div>
             <label className="block font-bold text-slate-800 mb-1">Nombre del Proyecto / Obra *</label>
             <input 
@@ -138,37 +164,66 @@ export default function ModalObra({
             />
           </div>
 
-          {/* BLOQUE 3: ESTADO OPERATIVO (PÍLDORAS TÁCTILES) */}
-          <div className="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-1.5">
-            <label className="block font-black text-slate-700 text-[11px] uppercase tracking-wider">
-              Estado de la Obra *
-            </label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { id: 'ACTIVA', label: 'En Proceso' },
-                { id: 'PAUSADA', label: 'Pausada' },
-                { id: 'TERMINADA', label: 'Concluida' }
-              ].map(est => (
+          {/* EMBUDO COMERCIAL OBS (10 ETAPAS) */}
+          <div className="p-3 bg-gradient-to-br from-blue-50/70 to-indigo-50/40 rounded-2xl border border-blue-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="font-black text-[#001757] text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                <span>🎯 Etapa Comercial con OBS (Pipeline) *</span>
+              </label>
+              <span className="text-[10px] font-black bg-[#001757] text-white px-2 py-0.5 rounded-md">
+                {etapaSeleccionadaObj.label}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+              {ETAPAS_COMERCIALES.map(etapa => (
                 <button
-                  key={est.id}
+                  key={etapa.id}
                   type="button"
-                  onClick={() => setForm(prev => ({ ...prev, estadoObra: est.id }))}
-                  className={`py-2 px-2 rounded-xl text-xs font-black border transition-all ${
-                    form.estadoObra === est.id
-                      ? (est.id === 'ACTIVA' ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : est.id === 'PAUSADA' ? 'bg-amber-600 text-white border-amber-600 shadow-xs' : 'bg-[#001757] text-white border-[#001757] shadow-xs')
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                  onClick={() => setForm(prev => ({ ...prev, etapaComercial: etapa.id }))}
+                  className={`py-2 px-1.5 rounded-xl text-[11px] font-black border transition-all truncate text-center ${
+                    form.etapaComercial === etapa.id
+                      ? 'bg-[#001757] text-white border-[#001757] shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}>
-                  {est.label}
+                  {etapa.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-white p-2.5 rounded-xl border border-blue-200 flex items-start gap-2 shadow-2xs">
+              <Info className="w-4 h-4 text-[#0091FB] shrink-0 mt-0.5" />
+              <p className="text-[11px] text-slate-700 leading-snug font-medium">
+                <strong className="text-[#001757]">{etapaSeleccionadaObj.label}:</strong> {etapaSeleccionadaObj.desc}
+              </p>
+            </div>
+          </div>
+
+          {/* FASE FÍSICA CONSTRUCTIVA */}
+          <div>
+            <label className="block font-bold text-slate-800 mb-1.5">Fase Física de Construcción *</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {FASES_OBRA.map(fase => (
+                <button
+                  key={fase}
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, estatusFase: fase }))}
+                  className={`h-10 px-2 rounded-xl text-xs font-bold border transition-all truncate ${
+                    form.estatusFase === fase
+                      ? 'bg-[#0091FB] text-white border-[#0091FB] shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  {fase}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* BLOQUE 4: CLIENTE VINCULADO (PRESERVA TODO LO ESCRITO) */}
+          {/* Cliente Vinculado */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block font-bold text-slate-800">Cliente Vinculado</label>
-              <span className="text-[10px] text-slate-400 font-semibold">(Opcional, anexable después)</span>
+              <span className="text-[10px] text-slate-400 font-semibold">(Opcional)</span>
             </div>
             <select
               value={form.clienteId}
@@ -186,32 +241,12 @@ export default function ModalObra({
               className="w-full h-11 px-3 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800 outline-none focus:border-[#0091FB]">
               <option value="">-- Sin cliente asignado (Prospección) --</option>
               {clientes.map(c => (
-                <option key={c.id} value={c.id}>{c.id} - {c.nombreCliente}</option>
+                <option key={c.id} value={c.id}>{c.id} - {c.nombreCliente} ({c.tipoMercado || 'CLIENTE'})</option>
               ))}
             </select>
           </div>
 
-          {/* BLOQUE 5: FASE CONSTRUCTIVA */}
-          <div>
-            <label className="block font-bold text-slate-800 mb-1.5">Fase Constructiva Actual *</label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {FASES_OBRA.map(fase => (
-                <button
-                  key={fase}
-                  type="button"
-                  onClick={() => setForm(prev => ({ ...prev, estatusFase: fase }))}
-                  className={`h-10 px-2 rounded-xl text-xs font-bold border transition-all truncate ${
-                    form.estatusFase === fase
-                      ? 'bg-[#001757] text-white border-[#001757] shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}>
-                  {fase}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* BLOQUE 6: GEOLOCALIZACIÓN Y DIRECCIÓN (MISMO ESTILO EN AMBOS) */}
+          {/* Ubicación y GPS */}
           <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <label className="font-bold text-slate-900 text-xs">Ubicación y Coordenadas GPS *</label>
@@ -244,7 +279,6 @@ export default function ModalObra({
 
         </form>
 
-        {/* BOTÓN INFERIOR HOMOLOGADO */}
         <div className="p-3.5 bg-white border-t border-slate-100 shrink-0">
           <button
             type="submit"

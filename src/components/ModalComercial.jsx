@@ -1,3 +1,4 @@
+// src/components/ModalComercial.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, DollarSign, UploadCloud, Check, Loader2, Trash2, 
@@ -109,11 +110,7 @@ export default function ModalComercial({
       onTexto: (texto) => {
         setObservaciones(prev => prev ? `${prev.trim()} ${texto}` : texto);
       },
-      onError: (err) => {
-        console.warn('Error dictado:', err);
-        if (err === 'sin_soporte') {
-          alert('El dictado por voz no está disponible en este dispositivo');
-        }
+      onError: () => {
         setGrabandoVoz(false);
         dictadoRef.current = null;
       },
@@ -179,13 +176,9 @@ export default function ModalComercial({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="w-full sm:max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-[110] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden border border-slate-200 my-auto">
         
-        <div className="pt-2 pb-1 sm:hidden">
-          <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
-        </div>
-
         {/* Cabecera */}
         <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="min-w-0 pr-2">
@@ -227,10 +220,9 @@ export default function ModalComercial({
             </button>
           </div>
 
-          {/* SI ES VENTA: SELECTOR DE COMPROBANTE Y ENLACE DE COTIZACIÓN */}
+          {/* Selector Comprobante de Venta */}
           {esVenta && (
             <div className="space-y-3 p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl animate-in fade-in duration-150">
-              
               <div>
                 <label className="block font-black text-emerald-950 text-[11px] uppercase tracking-wider mb-1.5">
                   Tipo de Comprobante de Venta *
@@ -289,7 +281,6 @@ export default function ModalComercial({
                   </select>
                 )}
               </div>
-
             </div>
           )}
 
@@ -365,7 +356,7 @@ export default function ModalComercial({
             />
           </div>
 
-          {/* OBSERVACIONES + BOTÓN DE VOZ */}
+          {/* Observaciones + Dictado por Voz */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="font-black text-slate-800 text-xs">
