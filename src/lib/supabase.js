@@ -113,7 +113,7 @@ export async function encolarAccionOffline(accion) {
       colaLocal.push(accion);
       localStorage.setItem('obs_cola_offline', JSON.stringify(colaLocal));
       window.dispatchEvent(new Event('obs_cola_actualizada'));
-            notificarToast('Guardado en la tablet · Sin señal', 'advertencia');
+      notificarToast('Guardado en la tablet · Sin señal', 'advertencia');
       return;
     }
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -121,7 +121,7 @@ export async function encolarAccionOffline(accion) {
     store.put(accion);
     tx.oncomplete = () => {
       window.dispatchEvent(new Event('obs_cola_actualizada'));
-            notificarToast('Guardado en la tablet · Sin señal', 'advertencia');
+      notificarToast('Guardado en la tablet · Sin señal', 'advertencia');
     };
   } catch (err) {
     console.warn('Error encolando acción offline:', err);
@@ -364,7 +364,7 @@ export async function guardarClienteDB(cliente) {
   if (!res.ok) {
     await encolarAccionOffline({ id: `cli_${fila.id}_${Date.now()}`, tabla: 'clientes', datos: fila });
   } else {
-    notificarToast(' Cliente guardado en la nube', 'exito');
+    notificarToast('Cliente guardado en la nube', 'exito');
   }
 }
 
@@ -404,8 +404,10 @@ export async function obtenerObrasDB() {
       nombre: o.nombre || o.proyecto || '',
       sucursal: o.sucursal,
       clienteId: o.cliente_id || null,
+      tipoObra: o.tipo_obra || 'CASA_HABITACION',
       tipoDesarrollo: o.tipo_desarrollo || 'OBRA NUEVA',
       estatusFase: o.estatus_fase || 'CIMENTACIÓN',
+      etapaComercial: o.etapa_comercial || 'PROSPECTO',
       estadoObra: o.estado_obra || 'ACTIVA',
       direccion: o.direccion || o.direccion_obra || '',
       lat: o.lat ? parseFloat(o.lat) : null,
@@ -425,8 +427,10 @@ export async function guardarObraDB(obra) {
     cliente_id: (obra.clienteId && String(obra.clienteId).trim() !== '' && obra.clienteId !== 'SIN_CLIENTE') 
       ? String(obra.clienteId).trim().toUpperCase() 
       : null,
+    tipo_obra: String(obra.tipoObra || 'CASA_HABITACION').trim().toUpperCase(),
     tipo_desarrollo: String(obra.tipoDesarrollo || 'OBRA NUEVA').trim().toUpperCase(),
     estatus_fase: String(obra.estatusFase || 'CIMENTACIÓN').trim().toUpperCase(),
+    etapa_comercial: String(obra.etapaComercial || 'PROSPECTO').trim().toUpperCase(),
     estado_obra: String(obra.estadoObra || 'ACTIVA').trim().toUpperCase(),
     direccion: obra.direccion ? String(obra.direccion).trim().toUpperCase() : null,
     lat: (obra.lat !== null && obra.lat !== undefined && !isNaN(Number(obra.lat))) ? Number(obra.lat) : null,
@@ -519,6 +523,7 @@ export async function obtenerVisitasDB() {
       fecha: v.fecha,
       asesorNombre: v.asesor_nombre,
       estatus: v.estatus,
+      etapaComercial: v.etapa_comercial || 'PROSPECTO',
       actividad: v.actividad,
       observaciones: v.observaciones || '',
       fotos: v.fotos || [],
@@ -544,6 +549,7 @@ export async function guardarVisitaDB(visita) {
     fecha: String(visita.fecha || '').trim(),
     asesor_nombre: String(visita.asesorNombre || 'ASESOR').trim().toUpperCase(),
     estatus: String(visita.estatus || 'CIMENTACIÓN').trim().toUpperCase(),
+    etapa_comercial: String(visita.etapaComercial || 'PROSPECTO').trim().toUpperCase(),
     actividad: String(visita.actividad || 'SUPERVISIÓN TÉCNICA').trim().toUpperCase(),
     observaciones: visita.observaciones ? String(visita.observaciones).trim().toUpperCase() : null,
     fotos: Array.isArray(visita.fotos) ? visita.fotos : [],
@@ -777,7 +783,7 @@ export async function sincronizarColaOffline() {
   }
 
   if (sincronizados > 0) {
-        notificarToast(`${sincronizados} registro(s) sincronizados`, 'exito');
+    notificarToast(`${sincronizados} registro(s) sincronizados`, 'exito');
   }
 
   return sincronizados;
@@ -803,8 +809,6 @@ export async function limpiarPosicionesFantasmaDB(deviceId, usuarioIdActual) {
   if (!supabase || !navigator.onLine) return 0;
   if (!deviceId) return 0;
   try {
-    // Borrar todas las posiciones que vinieron de ESTE dispositivo
-    // y que NO sean del usuario que acaba de iniciar sesión
     let query = supabase.from('posiciones_en_vivo').delete().eq('device_id', deviceId);
     if (usuarioIdActual) {
       query = query.neq('usuario_id', usuarioIdActual);

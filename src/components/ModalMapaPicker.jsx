@@ -158,7 +158,8 @@ export default function ModalMapaPicker({ isOpen, onClose, initialPos, onConfirm
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-900/80 backdrop-blur-sm flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4">
+    // ¡AQUÍ ESTÁ EL ARREGLO! Se cambió z-[80] por z-[200]
+    <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4">
       <div className="w-full sm:max-w-2xl h-[90vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden relative">
         
         {/* Cabecera */}
