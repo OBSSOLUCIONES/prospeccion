@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { 
@@ -620,8 +621,11 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  const handleVincularClienteAObra = async (obra) => {
-    const nuevoClienteId = prompt('Ingresa el ID del cliente para vincular (ej. ALT01):', obra.clienteId || '');
+  // ✅ AHORA (abre el formulario visual con el buscador y el filtro de sucursal):
+  const handleVincularClienteAObra = (obra) => {
+    setObraAEditar(obra);
+    setModalObraAbierto(true);
+  };
     if (nuevoClienteId) {
       const existe = clientes.find(c => c.id === nuevoClienteId.trim().toUpperCase());
       if (existe) {
@@ -636,6 +640,67 @@ export default function App() {
       }
     }
   };
+
+  // =========================================================================
+  // CÁLCULO EXACTO DE KPIS POR SUCURSAL (Resuelve datos erróneos en modal)
+  // =========================================================================
+  const kpisSucursal = useMemo(() => {
+    const hoyStr = new Date().toISOString().slice(0, 10);
+    // Toma la sucursal del asesor activo (ej. ALTOZANO) o el filtro seleccionado
+    const suc = (usuarioActivo && usuarioActivo.sucursal !== 'TODAS') 
+      ? usuarioActivo.sucursal 
+      : filtroSucursal;
+    const esTodas = suc === 'TODAS';
+
+    // 1. Obras pertenecientes a la sucursal
+    const obrasSuc = obras.filter(o => 
+      esTodas || (o.sucursal && o.sucursal.trim().toUpperCase() === suc.trim().toUpperCase())
+    );
+    const idsObrasSuc = new Set(obrasSuc.map(o => o.id));
+
+    // 2. Visitas de hoy hechas EXCLUSIVAMENTE en esta sucursal
+    const visitasHoySuc = visitas.filter(v => {
+      const fechaLimpia = v.fecha ? v.fecha.replace(' ', 'T') : '';
+      if (!fechaLimpia.startsWith(hoyStr)) return false;
+      if (esTodas) return true;
+      const coincidePorSucursal = v.sucursal && v.sucursal.trim().toUpperCase() === suc.trim().toUpperCase();
+      const coincidePorObra = v.obraId && idsObrasSuc.has(v.obraId);
+      return coincidePorSucursal || coincidePorObra;
+    }).length;
+
+    const metaDiaria = 5;
+    const porcentaje = Math.min(100, Math.round((visitasHoySuc / metaDiaria) * 100));
+
+    // 3. Movimientos (cotizaciones y ventas) de obras de esa sucursal
+    const movsSuc = movimientos.filter(m => {
+      if (esTodas) return true;
+      return m.obraId && idsObrasSuc.has(m.obraId);
+    });
+
+    const totalMonto = movsSuc.reduce((acc, m) => acc + (Number(m.monto) || 0), 0);
+    const ventasCerradas = movsSuc.filter(m => m.tipo === 'VENTA').length;
+
+    // 4. Obras frías de esa sucursal (>12 días sin visita)
+    const totalObrasFrias = obrasSuc.filter(o => {
+      const vList = visitas
+        .filter(v => v.obraId === o.id)
+        .sort((a, b) => new Date(b.fecha.replace(' ', 'T')) - new Date(a.fecha.replace(' ', 'T')));
+      if (!vList.length) return true;
+      const diffDias = Math.floor((Date.now() - new Date(vList[0].fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24));
+      return diffDias > 12;
+    }).length;
+
+    return {
+      visitasHoy: visitasHoySuc,
+      metaDiaria,
+      porcentajeMeta: porcentaje,
+      totalMonto,
+      totalObras: obrasSuc.length,
+      ventasCerradas,
+      totalObrasFrias,
+      sucursalNombre: suc
+    };
+  }, [obras, visitas, movimientos, filtroSucursal, usuarioActivo]);
 
   // =========================================================================
   // MOTOR 1: EXCEL POWER BI CON HIPERVÍNCULOS REALES CLIQUEABLES
@@ -1282,21 +1347,18 @@ export default function App() {
         onSeleccionarCliente={(c) => setClienteSeleccionado(c)}
       />
 
+      {/* MODAL DE RENDIMIENTO Y METAS FILTRADO EXACTAMENTE POR SUCURSAL */}
       <ResumenKpis
         isOpen={modalKpisAbierto}
         onClose={() => setModalKpisAbierto(false)}
-        sucursal={filtroSucursal}
-        visitasHoy={visitas.filter(v => v.fecha && v.fecha.startsWith(new Date().toISOString().slice(0, 10))).length}
-        metaDiaria={5}
-        porcentajeMeta={Math.min(100, Math.round((visitas.filter(v => v.fecha && v.fecha.startsWith(new Date().toISOString().slice(0, 10))).length / 5) * 100))}
-        totalMonto={movimientos.reduce((acc, m) => acc + (Number(m.monto) || 0), 0)}
-        totalObras={obras.length}
-        ventasCerradas={movimientos.filter(m => m.tipo === 'VENTA').length}
-        totalObrasFrias={obras.filter(o => {
-          const vList = visitas.filter(v => v.obraId === o.id).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-          if (!vList.length) return true;
-          return Math.floor((Date.now() - new Date(vList[0].fecha.replace(' ', 'T')).getTime()) / (1000 * 3600 * 24)) > 12;
-        }).length}
+        sucursal={kpisSucursal.sucursalNombre}
+        visitasHoy={kpisSucursal.visitasHoy}
+        metaDiaria={kpisSucursal.metaDiaria}
+        porcentajeMeta={kpisSucursal.porcentajeMeta}
+        totalMonto={kpisSucursal.totalMonto}
+        totalObras={kpisSucursal.totalObras}
+        ventasCerradas={kpisSucursal.ventasCerradas}
+        totalObrasFrias={kpisSucursal.totalObrasFrias}
         esDirector={esDirector}
         visitas={visitas}
         obras={obras}
