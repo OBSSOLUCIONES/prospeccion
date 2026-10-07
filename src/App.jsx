@@ -621,24 +621,9 @@ export default function App() {
     refrescarConteoOffline();
   };
 
-  // ✅ AHORA (abre el formulario visual con el buscador y el filtro de sucursal):
   const handleVincularClienteAObra = (obra) => {
     setObraAEditar(obra);
     setModalObraAbierto(true);
-  };
-    if (nuevoClienteId) {
-      const existe = clientes.find(c => c.id === nuevoClienteId.trim().toUpperCase());
-      if (existe) {
-        const obraActualizada = { ...obra, clienteId: existe.id };
-        setObras(prev => prev.map(o => o.id === obra.id ? obraActualizada : o));
-        setObraSeleccionada(obraActualizada);
-        await guardarObraDB(obraActualizada);
-        refrescarConteoOffline();
-        notificarToast(`✅ Obra vinculada con éxito a ${existe.nombreCliente}`, 'exito');
-      } else {
-        notificarToast('⚠️ No encontramos ningún cliente con ese ID', 'advertencia');
-      }
-    }
   };
 
   // =========================================================================
@@ -646,7 +631,6 @@ export default function App() {
   // =========================================================================
   const kpisSucursal = useMemo(() => {
     const hoyStr = new Date().toISOString().slice(0, 10);
-    // Toma la sucursal del asesor activo (ej. ALTOZANO) o el filtro seleccionado
     const suc = (usuarioActivo && usuarioActivo.sucursal !== 'TODAS') 
       ? usuarioActivo.sucursal 
       : filtroSucursal;
@@ -658,7 +642,7 @@ export default function App() {
     );
     const idsObrasSuc = new Set(obrasSuc.map(o => o.id));
 
-    // 2. Visitas de hoy hechas EXCLUSIVAMENTE en esta sucursal
+    // 2. Visitas de hoy para esa sucursal
     const visitasHoySuc = visitas.filter(v => {
       const fechaLimpia = v.fecha ? v.fecha.replace(' ', 'T') : '';
       if (!fechaLimpia.startsWith(hoyStr)) return false;
